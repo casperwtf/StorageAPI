@@ -203,9 +203,7 @@ public interface StatelessFieldStorage<K, V> {
      * @param values the values to save.
      */
     default CompletableFuture<Void> saveAll(final Collection<V> values) {
-        return CompletableFuture.runAsync(() -> {
-            values.forEach(this::save);
-        });
+        return CompletableFuture.runAsync(() -> values.forEach(v -> save(v).join()));
     }
 
     /**
@@ -217,6 +215,11 @@ public interface StatelessFieldStorage<K, V> {
      * Writes the storage to disk.
      */
     CompletableFuture<Void> write();
+
+    /**
+     * Deletes the storage from disk.
+     */
+    CompletableFuture<Void> deleteAll();
 
     /**
      * Closes the storage/storage connection.
@@ -241,9 +244,7 @@ public interface StatelessFieldStorage<K, V> {
      */
     default CompletableFuture<Boolean> migrate(final StatelessFieldStorage<K, V> storage) {
         return CompletableFuture.supplyAsync(() -> {
-            storage.allValues().thenAccept((values) -> {
-                values.forEach(this::save);
-            }).join();
+            storage.allValues().thenAccept((values) -> values.forEach(v -> save(v).join())).join();
             return true;
         });
     }

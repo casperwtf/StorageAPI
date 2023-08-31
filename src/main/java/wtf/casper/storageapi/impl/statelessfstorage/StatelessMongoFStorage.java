@@ -16,7 +16,7 @@ import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.IMongoStorage;
 import wtf.casper.storageapi.misc.MongoProvider;
-import wtf.casper.storageapi.misc.StorageGson;
+import wtf.casper.storageapi.utils.Constants;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -26,19 +26,21 @@ import java.util.concurrent.CompletableFuture;
 @Log
 public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>, ConstructableValue<K, V>, IMongoStorage {
 
-    private final Class<V> type;
+    private final Class<K> keyClass;
+    private final Class<V> valueClass;
     private final String idFieldName;
     private final MongoClient mongoClient;
     @Getter
     private final MongoCollection<Document> collection;
 
-    public StatelessMongoFStorage(final Class<V> type, final Credentials credentials) {
-        this(credentials.getUri(), credentials.getDatabase(), credentials.getCollection(), type);
+    public StatelessMongoFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
+        this(credentials.getUri(), credentials.getDatabase(), credentials.getCollection(), keyClass, valueClass);
     }
 
-    public StatelessMongoFStorage(final String uri, final String database, final String collection, final Class<V> type) {
-        this.type = type;
-        this.idFieldName = IdUtils.getIdName(this.type);
+    public StatelessMongoFStorage(final String uri, final String database, final String collection, final Class<K> keyClass, final Class<V> valueClass) {
+        this.valueClass = valueClass;
+        this.keyClass = keyClass;
+        this.idFieldName = IdUtils.getIdName(this.valueClass);
         try {
             log.fine("Connecting to MongoDB...");
             mongoClient = MongoProvider.getClient(uri);
@@ -56,6 +58,23 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     }
 
     @Override
+    public Class<K> key() {
+        return keyClass;
+    }
+
+    @Override
+    public Class<V> value() {
+        return valueClass;
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteAll() {
+        return CompletableFuture.runAsync(() -> {
+            getCollection().deleteMany(new Document());
+        });
+    }
+
+    @Override
     public CompletableFuture<Collection<V>> get(String field, Object value, FilterType filterType, SortingType sortingType) {
         return CompletableFuture.supplyAsync(() -> {
 
@@ -64,7 +83,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             List<Document> into = getCollection().find(filter).into(new ArrayList<>());
 
             for (Document document : into) {
-                V obj = StorageGson.getGson().fromJson(document.toJson(StorageGson.getJsonWriterSettings()), type);
+                V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
                 collection.add(obj);
             }
 
@@ -82,7 +101,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
                 return null;
             }
 
-            V obj = StorageGson.getGson().fromJson(document.toJson(StorageGson.getJsonWriterSettings()), type);
+            V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
             return obj;
         });
     }
@@ -97,8 +116,8 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
                 return null;
             }
 
-            V obj = StorageGson.getGson().fromJson(document.toJson(StorageGson.getJsonWriterSettings()), type);
-            K key = (K) IdUtils.getId(type, obj);
+            V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
+            K key = (K) IdUtils.getId(valueClass, obj);
             return obj;
         });
     }
@@ -106,10 +125,10 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     @Override
     public CompletableFuture<Void> save(V value) {
         return CompletableFuture.runAsync(() -> {
-            K key = (K) IdUtils.getId(type, value);
+            K key = (K) IdUtils.getId(valueClass, value);
             getCollection().replaceOne(
                     new Document(idFieldName, convertUUIDtoString(key)),
-                    Document.parse(StorageGson.getGson().toJson(value)),
+                    Document.parse(Constants.getGson().toJson(value)),
                     new ReplaceOptions().upsert(true)
             );
         });
@@ -119,7 +138,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     public CompletableFuture<Void> remove(V key) {
         return CompletableFuture.runAsync(() -> {
             try {
-                K id = (K) IdUtils.getId(type, key);
+                K id = (K) IdUtils.getId(valueClass, key);
                 getCollection().deleteMany(getDocument(FilterType.EQUALS, idFieldName, convertUUIDtoString(id)));
             } catch (Exception e) {
                 e.printStackTrace();
@@ -148,7 +167,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             List<V> collection = new ArrayList<>();
 
             for (Document document : into) {
-                V obj = StorageGson.getGson().fromJson(document.toJson(StorageGson.getJsonWriterSettings()), type);
+                V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
                 collection.add(obj);
             }
 

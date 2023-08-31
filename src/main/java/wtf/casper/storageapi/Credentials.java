@@ -15,14 +15,22 @@ public final class Credentials {
 
     private final StorageType type;
 
-    @Nullable private String host;
-    @Nullable private String username;
-    @Nullable private String password;
-    @Nullable private String database;
-    @Nullable private String collection;
-    @Nullable private String table;
-    @Nullable private String uri;
-    @Nullable private Integer port;
+    @Nullable
+    private String host;
+    @Nullable
+    private String username;
+    @Nullable
+    private String password;
+    @Nullable
+    private String database;
+    @Nullable
+    private String collection;
+    @Nullable
+    private String table;
+    @Nullable
+    private String uri;
+    @Nullable
+    private Integer port;
 
     public static Credentials of(final StorageType type, @Nullable final String host, @Nullable final String username, @Nullable final String password, @Nullable final String database, @Nullable String collection, @Nullable String table, @Nullable final String uri, final int port) {
         return new Credentials(type, host, username, password, database, collection, table, uri, port);

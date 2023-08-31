@@ -2,7 +2,7 @@ package wtf.casper.storageapi;
 
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
-import wtf.casper.storageapi.misc.StorageGson;
+import wtf.casper.storageapi.utils.Constants;
 import wtf.casper.storageapi.utils.ReflectionUtil;
 
 import java.util.*;
@@ -48,18 +48,18 @@ public enum FilterType {
      * @return true if the object passes the filter, false otherwise.
      */
     public boolean passes(Object object, String fieldName, Object value) {
-        StorageGson.debug("------------");
-        StorageGson.debug("Checking if " + object.getClass().getSimpleName() + " passes filter " + name() + " with value " + value + " on field " + fieldName);
+        Constants.debug("------------");
+        Constants.debug("Checking if " + object.getClass().getSimpleName() + " passes filter " + name() + " with value " + value + " on field " + fieldName);
 
         Object field = object;
         if (fieldName.contains(".")) {
             String[] split = fieldName.split("\\.");
             for (int i = 0; i < split.length; i++) {
-                StorageGson.debug("Checking if " + object.getClass().getSimpleName() + " has field " + split[i]);
+                Constants.debug("Checking if " + object.getClass().getSimpleName() + " has field " + split[i]);
 
                 Optional<Object> o = ReflectionUtil.getFieldValue(field, split[i]);
                 if (o.isEmpty()) {
-                    StorageGson.debug(object.getClass().getSimpleName() + " does not have field " + split[i] + " (empty)");
+                    Constants.debug(object.getClass().getSimpleName() + " does not have field " + split[i] + " (empty)");
                     return false;
                 }
                 field = o.get();
@@ -97,7 +97,7 @@ public enum FilterType {
         } else {
             Optional<Object> o = ReflectionUtil.getFieldValue(object, fieldName);
             if (o.isEmpty()) {
-                StorageGson.debug(object.getClass().getSimpleName() + " does not have field " + fieldName + " (empty)");
+                Constants.debug(object.getClass().getSimpleName() + " does not have field " + fieldName + " (empty)");
                 return false;
             }
             field = o.get();
@@ -105,9 +105,9 @@ public enum FilterType {
 
 
         if (!isApplicable(field.getClass()) && !(field instanceof Collection) && !(field instanceof Map)) {
-            StorageGson.debug(field.getClass()+"");
-            StorageGson.debug(object.getClass().getSimpleName() + " does not have field " + fieldName + " (not applicable)");
-            StorageGson.debug("Field value: " + field.getClass().getSimpleName());
+            Constants.debug(field.getClass() + "");
+            Constants.debug(object.getClass().getSimpleName() + " does not have field " + fieldName + " (not applicable)");
+            Constants.debug("Field value: " + field.getClass().getSimpleName());
             return false;
         }
 
@@ -142,7 +142,7 @@ public enum FilterType {
         }
 
         boolean check = check(field, value);
-        StorageGson.debug("Check: " + check);
+        Constants.debug("Check: " + check);
         return check;
     }
 

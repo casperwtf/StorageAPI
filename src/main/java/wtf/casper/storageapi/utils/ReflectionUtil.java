@@ -32,18 +32,16 @@ public class ReflectionUtil {
         Class<?> clazz = object.getClass();
         Field objectField = clazz.getDeclaredField(field);
         objectField.setAccessible(true);
-        Object val = objectField.get(object);
 
-        return val;
+        return objectField.get(object);
     }
 
     @SneakyThrows
     public static Object getPrivateField(Class<?> clazz, String field) {
         Field objectField = clazz.getDeclaredField(field);
         objectField.setAccessible(true);
-        Object val = objectField.get(null);
 
-        return val;
+        return objectField.get(null);
     }
 
     /**
@@ -125,19 +123,17 @@ public class ReflectionUtil {
     /**
      * Get the generic type of class (e.g. List<String> -> String)
      *
-     * @param clazz the class to get the generic type from
+     * @param field the field to get the generic type from
      * @param index the index of the generic type
      * @return the generic type
      */
     @Nullable
-    public static <T> Class<T> getGenericType(Class<T> clazz, int index) {
-        Type type = clazz.getGenericSuperclass();
-        if (type instanceof ParameterizedType parameterizedType) {
-            Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
-            try {
-                return (Class<T>) actualTypeArguments[index];
-            } catch (ClassCastException e) {
-                return null;
+    public static <T> Class<T> getGenericType(Field field, int index) {
+        Type genericType = field.getGenericType();
+        if (genericType instanceof ParameterizedType parameterizedType) {
+            Type[] types = parameterizedType.getActualTypeArguments();
+            if (types.length > index) {
+                return (Class<T>) types[index];
             }
         }
         return null;

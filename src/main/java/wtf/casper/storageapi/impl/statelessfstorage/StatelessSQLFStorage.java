@@ -73,6 +73,13 @@ public class StatelessSQLFStorage<K, V> implements ISQLStorage<K, V> {
         return valueClass;
     }
 
+    @Override
+    public CompletableFuture<Void> deleteAll() {
+        return CompletableFuture.runAsync(() -> {
+            execute("DELETE FROM " + this.table);
+        });
+    }
+
     @SneakyThrows
     public CompletableFuture<Collection<V>> get(final String field, Object value, FilterType filterType, SortingType sortingType) {
         return CompletableFuture.supplyAsync(() -> {
@@ -89,14 +96,11 @@ public class StatelessSQLFStorage<K, V> implements ISQLStorage<K, V> {
                 case ENDS_WITH -> this.endsWith(field, value, values);
                 case GREATER_THAN -> this.greaterThan(field, value, values);
                 case LESS_THAN -> this.lessThan(field, value, values);
-                case GREATER_THAN_OR_EQUAL_TO ->
-                        this.greaterThanOrEqualTo(field, value, values);
-                case LESS_THAN_OR_EQUAL_TO ->
-                        this.lessThanOrEqualTo(field, value, values);
+                case GREATER_THAN_OR_EQUAL_TO -> this.greaterThanOrEqualTo(field, value, values);
+                case LESS_THAN_OR_EQUAL_TO -> this.lessThanOrEqualTo(field, value, values);
                 case NOT_EQUALS -> this.notEquals(field, value, values);
                 case NOT_CONTAINS -> this.notContains(field, value, values);
-                case NOT_STARTS_WITH ->
-                        this.notStartsWIth(field, value, values);
+                case NOT_STARTS_WITH -> this.notStartsWIth(field, value, values);
                 case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
             }
 

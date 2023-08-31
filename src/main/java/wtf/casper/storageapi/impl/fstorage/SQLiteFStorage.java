@@ -48,9 +48,6 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
         this.ds.setAutoCommit(true);
         this.execute(createTableFromObject());
         this.scanForMissingColumns();
-
-        this.execute(createTableFromObject());
-        this.scanForMissingColumns();
     }
 
     @SneakyThrows
@@ -65,8 +62,6 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
         this.ds.setConnectionTimeout(120000);
         this.ds.setLeakDetectionThreshold(300000);
         this.ds.setAutoCommit(true);
-        this.execute(createTableFromObject());
-        this.scanForMissingColumns();
         this.execute(createTableFromObject());
         this.scanForMissingColumns();
     }
@@ -96,6 +91,23 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
         this.cache = cache;
     }
 
+    @Override
+    public Class<K> key() {
+        return keyClass;
+    }
+
+    @Override
+    public Class<V> value() {
+        return valueClass;
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteAll() {
+        return CompletableFuture.runAsync(() -> {
+            execute("DELETE FROM " + this.table);
+        });
+    }
+
     @SneakyThrows
     public CompletableFuture<Collection<V>> get(final String field, Object value, FilterType filterType, SortingType sortingType) {
         return CompletableFuture.supplyAsync(() -> {
@@ -112,14 +124,11 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
                 case ENDS_WITH -> this.endsWith(field, value, values);
                 case GREATER_THAN -> this.greaterThan(field, value, values);
                 case LESS_THAN -> this.lessThan(field, value, values);
-                case GREATER_THAN_OR_EQUAL_TO ->
-                        this.greaterThanOrEqualTo(field, value, values);
-                case LESS_THAN_OR_EQUAL_TO ->
-                        this.lessThanOrEqualTo(field, value, values);
+                case GREATER_THAN_OR_EQUAL_TO -> this.greaterThanOrEqualTo(field, value, values);
+                case LESS_THAN_OR_EQUAL_TO -> this.lessThanOrEqualTo(field, value, values);
                 case NOT_EQUALS -> this.notEquals(field, value, values);
                 case NOT_CONTAINS -> this.notContains(field, value, values);
-                case NOT_STARTS_WITH ->
-                        this.notStartsWIth(field, value, values);
+                case NOT_STARTS_WITH -> this.notStartsWIth(field, value, values);
                 case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
             }
 
@@ -150,6 +159,7 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
     public CompletableFuture<Void> save(final V value) {
         return CompletableFuture.runAsync(() -> {
             if (this.ds.isClosed()) {
+                logger().warning("Could not save " + valueClass.getSimpleName() + " because the data source is closed.");
                 return;
             }
             Object id = IdUtils.getId(valueClass, value);
@@ -160,8 +170,7 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
 
             cache.put((K) id, value);
 
-            String values = this.getValues(value, valueClass, false);
-            this.executeUpdate("INSERT INTO " + this.table + " VALUES (" + values + ") ON CONFLICT(" + IdUtils.getIdName(valueClass) + ") DO UPDATE SET " + this.getUpdateValues() + ";");
+            this.executeUpdate("INSERT INTO " + this.table + " VALUES (" + this.getValues(value, valueClass) + ") ON CONFLICT(" + IdUtils.getIdName(valueClass) + ") DO UPDATE SET " + this.getUpdateValues() + ";");
         });
     }
 

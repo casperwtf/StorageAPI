@@ -6,21 +6,21 @@ import wtf.casper.storageapi.StatelessFieldStorage;
 import wtf.casper.storageapi.id.StorageSerialized;
 import wtf.casper.storageapi.id.Transient;
 import wtf.casper.storageapi.id.utils.IdUtils;
+import wtf.casper.storageapi.utils.Constants;
 import wtf.casper.storageapi.utils.ReflectionUtil;
 import wtf.casper.storageapi.utils.UnsafeConsumer;
 
+import javax.annotation.Nullable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.sql.*;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.sql.Date;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
-public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, ConstructableValue<K, V>, KeyValue<K, V> {
+public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, ConstructableValue<K, V> {
 
     HikariDataSource getDataSource();
 
@@ -117,31 +117,131 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
         this.execute("ALTER TABLE " + getTable() + " ADD COLUMN " + column + " " + type + ";");
     }
 
+    default boolean requiresSubTable(String parent, Field field) {
+        return Iterable.class.isAssignableFrom(field.getType()) || Map.class.isAssignableFrom(field.getType()) || field.getType().isArray();
+    }
+
+    default void createSubTable(String parent, Field field) {
+        if (Iterable.class.isAssignableFrom(field.getType())) {
+            Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
+            if (genericType == null) {
+                throw new IllegalStateException("Could not find generic type for " + field.getType().getName());
+            }
+            this.execute("CREATE TABLE IF NOT EXISTS " + getTable() + "_" + parent + "_" + field.getName() + " (" + createSubTables(field, null, field.getName() + ".") + ");");
+        } else if (field.getType().isArray()) {
+            Class<?> componentType = field.getType().getComponentType();
+            if (componentType == null) {
+                throw new IllegalStateException("Could not find component type for " + field.getType().getName());
+            }
+            this.execute("CREATE TABLE IF NOT EXISTS " + getTable() + "_" + parent + "_" + field.getName() + " (" + createSubTables(field, null, field.getName() + ".") + ");");
+        } else if (Map.class.isAssignableFrom(field.getType())) {
+            Class<?> genericType = ReflectionUtil.getGenericType(field, 1);
+            if (genericType == null) {
+                throw new IllegalStateException("Could not find generic type for " + field.getType().getName());
+            }
+            this.execute("CREATE TABLE IF NOT EXISTS " + getTable() + "_" + parent + "_" + field.getName() + " (" + createSubTables(field, null, field.getName() + ".") + ");");
+        }
+    }
+
+    default List<Field> getFields(Class<?> clazz) {
+        return Arrays.stream(clazz.getDeclaredFields())
+                .filter(field -> !field.isAnnotationPresent(Transient.class))
+                .filter(field -> !Modifier.isTransient(field.getModifiers()))
+                .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                .toList();
+    }
+
     /**
      * Will scan the class for fields and add them to the database if they don't exist
      */
     default void scanForMissingColumns() {
-        List<Field> fields = Arrays.stream(this.value().getDeclaredFields())
-                .filter(field -> !field.isAnnotationPresent(Transient.class))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
+        List<Field> fields = getFields(value());
 
         for (Field declaredField : fields) {
-            final String name = declaredField.getName();
-            final String type = this.getType(declaredField.getType());
+            declaredField.setAccessible(true);
+            Map<String, String> columns = new HashMap<>();
+
+            if (Iterable.class.isAssignableFrom(declaredField.getType())) {
+                Class<?> genericType = ReflectionUtil.getGenericType(declaredField, 0);
+                if (genericType == null) {
+                    throw new IllegalStateException("Could not find generic type for " + declaredField.getType().getName());
+                }
+                columns.putAll(scanForMissingColumnsSub(declaredField, null, declaredField.getName() + "."));
+            } else if (declaredField.getType().isArray()) {
+                Class<?> componentType = declaredField.getType().getComponentType();
+                if (componentType == null) {
+                    throw new IllegalStateException("Could not find component type for " + declaredField.getType().getName());
+                }
+                columns.putAll(scanForMissingColumnsSub(declaredField, null, declaredField.getName() + "."));
+            } else if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
+                columns.putAll(scanForMissingColumnsSub(declaredField, null, declaredField.getName() + "."));
+            } else {
+                columns.put(declaredField.getName(), getType(declaredField.getType()));
+            }
 
             this.query("SELECT * FROM " + getTable() + " LIMIT 1;", resultSet -> {
-                try {
-                    if (resultSet.findColumn(name) == 0) {
-                        this.addColumn(name, type);
+                columns.forEach((s, s2) -> {
+                    try {
+                        if (resultSet.findColumn(s) == 0) {
+                            this.addColumn(s, s2);
+                        }
+                    } catch (SQLException e) {
+                        this.addColumn(s, s2);
                     }
-                } catch (SQLException e) {
-                    this.addColumn(name, type);
-                }
-
+                });
                 resultSet.close();
             });
         }
+    }
+
+    default Map<String, String> scanForMissingColumnsSub(Field field, Class<?> clazz, String parentPrefix) {
+        if (field == null && clazz == null) {
+            throw new IllegalStateException("Field and clazz cannot both be null");
+        }
+
+        final Class<?> type = field == null ? clazz : field.getType();
+
+        if (Iterable.class.isAssignableFrom(type)) {
+            if (field == null) {
+                throw new IllegalStateException("Subtable cannot generate subtable from null field");
+            }
+            Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
+            if (genericType == null) {
+                throw new IllegalStateException("Could not find generic type for " + type.getName());
+            }
+            return scanForMissingColumnsSub(null, genericType, parentPrefix + field.getName() + ".");
+        } else if (type.isArray()) {
+            Class<?> componentType = type.getComponentType();
+            if (componentType == null) {
+                throw new IllegalStateException("Could not find component type for " + type.getName());
+            }
+            if (field == null) {
+                throw new IllegalStateException("Subtable cannot generate subtable from null field");
+            }
+
+            return scanForMissingColumnsSub(null, componentType, parentPrefix + field.getName() + ".");
+        }
+
+        List<Field> fields = getFields(type);
+
+        if (fields.isEmpty()) {
+            throw new IllegalStateException("Could not find any fields for " + type.getName());
+        }
+
+        Map<String, String> columns = new HashMap<>();
+        for (Field declaredField : fields) {
+            declaredField.setAccessible(true);
+            final String name = declaredField.getName();
+            String type1 = this.getType(declaredField.getType());
+
+            if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
+                columns.putAll(scanForMissingColumnsSub(declaredField, null, parentPrefix + name + "."));
+            } else {
+                columns.put(parentPrefix + name, type1);
+            }
+        }
+
+        return columns;
     }
 
     /**
@@ -150,13 +250,10 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
     default String createTableFromObject() {
         final StringBuilder builder = new StringBuilder();
 
-        List<Field> fields = Arrays.stream(this.value().getDeclaredFields())
-                .filter(field -> !field.isAnnotationPresent(Transient.class))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
+        List<Field> fields = getFields(value());
 
         if (fields.size() == 0) {
-            return "";
+            throw new IllegalStateException("Could not find any fields for " + value().getName());
         }
 
         builder.append("CREATE TABLE IF NOT EXISTS ").append(getTable()).append(" (");
@@ -165,54 +262,93 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
 
         int index = 0;
         for (Field declaredField : fields) {
-
+            declaredField.setAccessible(true);
             final String name = declaredField.getName();
             String type = this.getType(declaredField.getType());
+            if (Iterable.class.isAssignableFrom(declaredField.getType())) {
+                Class<?> genericType = ReflectionUtil.getGenericType(declaredField, 0);
+                if (genericType == null) {
+                    throw new IllegalStateException("Could not find generic type for " + declaredField.getType().getName());
+                }
 
-            if (declaredField.isAnnotationPresent(StorageSerialized.class)) {
-                builder.append(createSubTables(declaredField.getType(), declaredField.getName() + "."));
-                continue;
-            }
+                builder.append(createSubTables(declaredField, null, declaredField.getName() + "."));
+            } else if (declaredField.getType().isArray()) {
+                Class<?> componentType = declaredField.getType().getComponentType();
+                if (componentType == null) {
+                    throw new IllegalStateException("Could not find component type for " + declaredField.getType().getName());
+                }
 
-            builder.append("`").append(name).append("`").append(" ").append(type);
-            if (name.equals(idName)) {
-                builder.append(" PRIMARY KEY");
+                builder.append(createSubTables(declaredField, null, declaredField.getName() + "."));
+            } else if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
+                builder.append(createSubTables(declaredField, null, declaredField.getName() + "."));
+            } else {
+                builder.append("`").append(name).append("`").append(" ").append(type);
+                if (name.equals(idName)) {
+                    builder.append(" PRIMARY KEY");
+                }
             }
 
             index++;
+            if (index != fields.size()) {
+                builder.append(", ");
+            }
+        }
+        builder.append(");");
+        return builder.toString();
+    }
 
+    default String createSubTables(@Nullable Field field, @Nullable Class<?> directClazz, String parentPrefix) {
+        if (field == null && directClazz == null) {
+            throw new IllegalStateException("Field and directClazz cannot both be null");
+        }
+
+        final Class<?> clazz = field == null ? directClazz : field.getType();
+
+        if (Iterable.class.isAssignableFrom(clazz)) {
+            if (field == null) {
+                throw new IllegalStateException("Subtable cannot generate subtable from null field");
+            }
+            Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
+            if (genericType == null) {
+                throw new IllegalStateException("Could not find generic type for " + clazz.getName());
+            }
+            return createSubTables(null, genericType, parentPrefix + field.getName() + ".");
+        } else if (clazz.isArray()) {
+            Class<?> componentType = clazz.getComponentType();
+            if (componentType == null) {
+                throw new IllegalStateException("Could not find component type for " + clazz.getName());
+            }
+            if (field == null) {
+                throw new IllegalStateException("Subtable cannot generate subtable from null field");
+            }
+
+            return createSubTables(null, componentType, parentPrefix + field.getName() + ".");
+        }
+
+        List<Field> fields = getFields(clazz);
+
+        if (fields.isEmpty()) {
+            throw new IllegalStateException("Could not find any fields for " + clazz.getName());
+        }
+
+        StringBuilder builder = new StringBuilder();
+        int index = 0;
+        for (Field declaredField : fields) {
+            declaredField.setAccessible(true);
+            final String name = declaredField.getName();
+            String type = this.getType(declaredField.getType());
+
+            if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
+                builder.append(createSubTables(declaredField, null, parentPrefix + name + "."));
+            } else {
+                builder.append("`").append(parentPrefix).append(name).append("`").append(" ").append(type);
+            }
+
+            index++;
             if (index != fields.size()) {
                 builder.append(", ");
             }
 
-        }
-        builder.append(");");
-        System.out.println(builder.toString());
-        return builder.toString();
-    }
-
-    default String createSubTables(Class<?> clazz, String parentPrefix) {
-        List<Field> fields = Arrays.stream(this.value().getDeclaredFields())
-                .filter(field -> !field.isAnnotationPresent(Transient.class))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
-
-        if (fields.isEmpty()) {
-            return "";
-        }
-
-        StringBuilder builder = new StringBuilder();
-        for (Field declaredField : fields) {
-
-            final String name = declaredField.getName();
-            String type = this.getType(declaredField.getType());
-
-            if (declaredField.isAnnotationPresent(StorageSerialized.class)) {
-                builder.append(createSubTables(declaredField.getType(), parentPrefix + declaredField.getName() + "."));
-                continue;
-            }
-
-            builder.append("`").append(parentPrefix).append(name).append("`").append(" ").append(type);
         }
 
         return builder.toString();
@@ -224,16 +360,13 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
     @SneakyThrows
     default V construct(final ResultSet resultSet) {
         final V value = constructValue();
-        List<Field> declaredFields = Arrays.stream(value().getDeclaredFields())
-                .filter(field -> !field.isAnnotationPresent(Transient.class))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
+        List<Field> fields = getFields(value());
 
-        for (Field declaredField : declaredFields) {
+        for (Field declaredField : fields) {
+            declaredField.setAccessible(true);
             if (declaredField.isAnnotationPresent(StorageSerialized.class)) {
                 final String name = declaredField.getName();
-                final String string = resultSet.getString(name);
-                final Object object = StorageGson.getGson().fromJson(string, declaredField.getType());
+                final Object object = constructSubObject(name, declaredField.getType(), resultSet);
                 declaredField.setAccessible(true);
                 declaredField.set(value, object);
                 continue;
@@ -257,17 +390,46 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
         return value;
     }
 
+    default Object constructSubObject(String name, Class<?> clazz, ResultSet resultSet) {
+        Map<String, Object> subResultSet = new HashMap<>();
+        List<Field> fields = getFields(clazz);
+        try {
+            for (Field field : fields) {
+                field.setAccessible(true);
+                if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
+                    Object object = constructSubObject(name + "." + field.getName(), field.getType(), resultSet);
+                    subResultSet.put(field.getName(), object);
+                    continue;
+                }
+
+                Object object = resultSet.getObject(name + "." + field.getName());
+                subResultSet.put(field.getName(), object);
+            }
+
+            Object o = Constants.OBJENESIS_STD.newInstance(clazz);
+            for (Map.Entry<String, Object> entry : subResultSet.entrySet()) {
+                ReflectionUtil.setPrivateField(o, entry.getKey(), entry.getValue());
+            }
+            return o;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     default String getUpdateValues() {
         final StringBuilder builder = new StringBuilder();
         int i = 0;
 
-        List<Field> fields = Arrays.stream(value().getDeclaredFields())
-                .filter(field -> !field.isAnnotationPresent(Transient.class))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
+        List<Field> fields = getFields(value());
 
         for (final Field field : fields) {
-            builder.append("`").append(field.getName()).append("` = excluded.`").append(field.getName()).append("`");
+            field.setAccessible(true);
+            if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
+                builder.append(getUpdateValuesSub(field, null, field.getName() + "."));
+            } else {
+                builder.append("`").append(field.getName()).append("` = excluded.`").append(field.getName()).append("`");
+            }
 
             if (i != fields.size() - 1) {
                 builder.append(", ");
@@ -279,22 +441,136 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
         return builder.toString();
     }
 
+    default String getUpdateValuesSub(Field field, Class<?> clazz, String parentPrefix) {
+        if (field == null && clazz == null) {
+            throw new IllegalStateException("Field and clazz cannot both be null");
+        }
+
+        final Class<?> type = field == null ? clazz : field.getType();
+
+        if (Iterable.class.isAssignableFrom(type)) {
+            if (field == null) {
+                throw new IllegalStateException("Subtable cannot generate subtable from null field");
+            }
+            Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
+            if (genericType == null) {
+                throw new IllegalStateException("Could not find generic type for " + type.getName());
+            }
+            return getUpdateValuesSub(null, genericType, parentPrefix + field.getName() + ".");
+        } else if (type.isArray()) {
+            Class<?> componentType = type.getComponentType();
+            if (componentType == null) {
+                throw new IllegalStateException("Could not find component type for " + type.getName());
+            }
+            if (field == null) {
+                throw new IllegalStateException("Subtable cannot generate subtable from null field");
+            }
+
+            return getUpdateValuesSub(null, componentType, parentPrefix + field.getName() + ".");
+        }
+
+        List<Field> fields = getFields(type);
+
+        if (fields.isEmpty()) {
+            throw new IllegalStateException("Could not find any fields for " + type.getName());
+        }
+
+        StringBuilder builder = new StringBuilder();
+        for (Field declaredField : fields) {
+            declaredField.setAccessible(true);
+            final String name = declaredField.getName();
+            String type1 = this.getType(declaredField.getType());
+
+            if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
+                builder.append(getUpdateValuesSub(declaredField, null, parentPrefix + name + "."));
+            } else {
+                builder.append("`").append(parentPrefix).append(name).append("`").append(" ").append(type1);
+            }
+        }
+
+        return builder.toString();
+    }
+
     /**
      * Generates an SQL String for the columns associated with a value class.
      */
     default String getColumns() {
         final StringBuilder builder = new StringBuilder();
 
-        List<Field> fields = Arrays.stream(value().getDeclaredFields())
-                .filter(field -> !field.isAnnotationPresent(Transient.class))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
+        List<Field> fields = getFields(value());
 
         for (final Field field : fields) {
-            builder.append("`").append(field.getName()).append("`").append(",");
+            field.setAccessible(true);
+            if (Iterable.class.isAssignableFrom(field.getType())) {
+                Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
+                if (genericType == null) {
+                    throw new IllegalStateException("Could not find generic type for " + field.getType().getName());
+                }
+                builder.append(getSubColumns(field, null, field.getName() + "."));
+            } else if (field.getType().isArray()) {
+                Class<?> componentType = field.getType().getComponentType();
+                if (componentType == null) {
+                    throw new IllegalStateException("Could not find component type for " + field.getType().getName());
+                }
+                builder.append(getSubColumns(field, null, field.getName() + "."));
+            } else if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
+                builder.append(getSubColumns(field, null, field.getName() + "."));
+            } else {
+                builder.append("`").append(field.getName()).append("`").append(",");
+            }
         }
 
         return builder.substring(0, builder.length() - 1);
+    }
+
+    default String getSubColumns(@Nullable Field field, @Nullable Class<?> directClazz, String parentPrefix) {
+        if (field == null && directClazz == null) {
+            throw new IllegalStateException("Field and directClazz cannot both be null");
+        }
+
+        final Class<?> clazz = field == null ? directClazz : field.getType();
+
+        if (Iterable.class.isAssignableFrom(clazz)) {
+            if (field == null) {
+                throw new IllegalStateException("Subtable cannot generate subtable from null field");
+            }
+            Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
+            if (genericType == null) {
+                throw new IllegalStateException("Could not find generic type for " + clazz.getName());
+            }
+            return getSubColumns(null, genericType, parentPrefix + field.getName() + ".");
+        } else if (clazz.isArray()) {
+            Class<?> componentType = clazz.getComponentType();
+            if (componentType == null) {
+                throw new IllegalStateException("Could not find component type for " + clazz.getName());
+            }
+            if (field == null) {
+                throw new IllegalStateException("Subtable cannot generate subtable from null field");
+            }
+
+            return getSubColumns(null, componentType, parentPrefix + field.getName() + ".");
+        }
+
+        List<Field> fields = getFields(clazz);
+
+        if (fields.isEmpty()) {
+            throw new IllegalStateException("Could not find any fields for " + clazz.getName());
+        }
+
+        StringBuilder builder = new StringBuilder();
+        for (Field declaredField : fields) {
+            declaredField.setAccessible(true);
+            final String name = declaredField.getName();
+            String type = this.getType(declaredField.getType());
+
+            if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
+                builder.append(getSubColumns(declaredField, null, parentPrefix + name + "."));
+            } else {
+                builder.append("`").append(parentPrefix).append(name).append("`").append(" ").append(type);
+            }
+        }
+
+        return builder.toString();
     }
 
 
@@ -317,55 +593,62 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
         };
     }
 
-    default String getValues(Object value, Class<?> clazz) {
-        return getValues(value, clazz, false);
-    }
 
     /**
      * Generates an SQL String for inserting a value into the database.
      */
-    default String getValues(Object value, Class<?> clazz, boolean subObject) {
+    default String getValues(Object value, Class<?> clazz) {
         final StringBuilder builder = new StringBuilder();
         int i = 0;
 
-        List<Field> fields = Arrays.stream(clazz.getDeclaredFields())
-                .filter(field -> !field.isAnnotationPresent(Transient.class))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .filter(field -> !Modifier.isStatic(field.getModifiers()))
-                .toList();
+        List<Field> fields = getFields(clazz);
 
         for (final Field field : fields) {
+            field.setAccessible(true);
             Object privateField = ReflectionUtil.getPrivateField(value, field.getName());
-            if (field.isAnnotationPresent(StorageSerialized.class)) {
-                builder.append(getValues(privateField, privateField.getClass(), true));
-            } else {
-                boolean shouldHaveQuotes = shouldHaveQuotes(privateField);
-                if (shouldHaveQuotes) {
-                    builder.append("'");
+            if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
+                try {
+                    Object o = field.get(value);
+                    builder.append(getValues(o, field.getType())).append(", ");
+                } catch (IllegalAccessException e) {
+                    throw new RuntimeException(e);
                 }
-                if (privateField instanceof Map<?, ?> map) {
-                    if (map.isEmpty()) {
-                        builder.append("NULL");
-                    }
-                } else if (privateField instanceof List<?> list) {
-                    if (list.isEmpty()) {
-                        builder.append("''");
-                    }
-                } else {
-                    builder.append(privateField);
-                }
-
-                if (shouldHaveQuotes) {
-                    builder.append("'");
-                }
+                continue;
             }
+
+            boolean shouldHaveQuotes = shouldHaveQuotes(privateField);
+
+            if (shouldHaveQuotes) {
+                builder.append("'");
+            }
+
+            if (privateField instanceof Map<?, ?> map) {
+                if (map.isEmpty()) {
+                    builder.append("NULL");
+                }
+            } else if (privateField instanceof List<?> list) {
+                if (list.isEmpty()) {
+                    builder.append("''");
+                }
+            } else {
+                builder.append(privateField);
+            }
+
+            if (shouldHaveQuotes) {
+                builder.append("'");
+            }
+
             if (i != fields.size() - 1) {
                 builder.append(", ");
             }
             i++;
         }
 
-        return builder.toString();
+        String string = builder.toString();
+        if (string.endsWith(", ")) {
+            string = string.substring(0, string.length() - 2);
+        }
+        return string;
     }
 
     default boolean shouldHaveQuotes(Object value) {

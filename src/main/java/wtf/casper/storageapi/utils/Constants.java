@@ -1,4 +1,4 @@
-package wtf.casper.storageapi.misc;
+package wtf.casper.storageapi.utils;
 
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
@@ -7,10 +7,13 @@ import com.google.gson.GsonBuilder;
 import lombok.Getter;
 import lombok.Setter;
 import org.bson.json.JsonWriterSettings;
+import org.objenesis.ObjenesisStd;
 import wtf.casper.storageapi.id.Transient;
 
-public class StorageGson {
+public class Constants {
+    public static final ObjenesisStd OBJENESIS_STD = new ObjenesisStd(true);
     public final static boolean DEBUG = false;
+
     public static void debug(String message) {
         if (DEBUG) {
             System.out.println(message);
@@ -33,7 +36,8 @@ public class StorageGson {
             return clazz.isAnnotationPresent(Transient.class);
         }
     };
-    @Getter @Setter
+    @Getter
+    @Setter
     private static Gson gson;
 
     static {
@@ -41,4 +45,5 @@ public class StorageGson {
         gsonBuilder.addSerializationExclusionStrategy(exclusionStrategy);
         gson = gsonBuilder.create();
     }
+
 }

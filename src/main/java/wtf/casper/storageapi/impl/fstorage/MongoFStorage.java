@@ -19,7 +19,7 @@ import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.IMongoStorage;
 import wtf.casper.storageapi.misc.MongoProvider;
-import wtf.casper.storageapi.misc.StorageGson;
+import wtf.casper.storageapi.utils.Constants;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 @Log
 public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableValue<K, V>, IMongoStorage {
 
+    protected final Class<K> keyClass;
     protected final Class<V> valueClass;
     private final String idFieldName;
     private final MongoClient mongoClient;
@@ -38,12 +39,13 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
 
     private Cache<K, V> cache = new CaffeineCache<>(Caffeine.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build());
 
-    public MongoFStorage(final Class<V> type, final Credentials credentials) {
-        this(credentials.getUri(), credentials.getDatabase(), credentials.getCollection(), type);
+    public MongoFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
+        this(credentials.getUri(), credentials.getDatabase(), credentials.getCollection(), keyClass, valueClass);
     }
 
-    public MongoFStorage(final String uri, final String database, final String collection, final Class<V> type) {
-        this.valueClass = type;
+    public MongoFStorage(final String uri, final String database, final String collection, final Class<K> keyClass, final Class<V> valueClass) {
+        this.valueClass = valueClass;
+        this.keyClass = keyClass;
         this.idFieldName = IdUtils.getIdName(this.valueClass);
         try {
             log.fine("Connecting to MongoDB...");
@@ -74,6 +76,23 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
     }
 
     @Override
+    public Class<V> value() {
+        return valueClass;
+    }
+
+    @Override
+    public Class<K> key() {
+        return keyClass;
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteAll() {
+        return CompletableFuture.runAsync(() -> {
+            getCollection().deleteMany(new Document());
+        });
+    }
+
+    @Override
     public CompletableFuture<Collection<V>> get(String field, Object value, FilterType filterType, SortingType sortingType) {
         return CompletableFuture.supplyAsync(() -> {
 
@@ -82,7 +101,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             List<Document> into = getCollection().find(filter).into(new ArrayList<>());
 
             for (Document document : into) {
-                V obj = StorageGson.getGson().fromJson(document.toJson(StorageGson.getJsonWriterSettings()), valueClass);
+                V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
                 collection.add(obj);
             }
 
@@ -104,7 +123,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
                 return null;
             }
 
-            V obj = StorageGson.getGson().fromJson(document.toJson(StorageGson.getJsonWriterSettings()), valueClass);
+            V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
             cache.asMap().putIfAbsent(key, obj);
             return obj;
         });
@@ -128,7 +147,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
                 return null;
             }
 
-            V obj = StorageGson.getGson().fromJson(document.toJson(StorageGson.getJsonWriterSettings()), valueClass);
+            V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
             K key = (K) IdUtils.getId(valueClass, obj);
             cache.asMap().putIfAbsent(key, obj);
             return obj;
@@ -142,7 +161,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             cache.asMap().putIfAbsent(key, value);
             getCollection().replaceOne(
                     new Document(idFieldName, convertUUIDtoString(key)),
-                    Document.parse(StorageGson.getGson().toJson(value)),
+                    Document.parse(Constants.getGson().toJson(value)),
                     new ReplaceOptions().upsert(true)
             );
         });
@@ -182,7 +201,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             List<V> collection = new ArrayList<>();
 
             for (Document document : into) {
-                V obj = StorageGson.getGson().fromJson(document.toJson(StorageGson.getJsonWriterSettings()), valueClass);
+                V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
                 collection.add(obj);
             }
 
