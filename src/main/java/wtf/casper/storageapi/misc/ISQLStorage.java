@@ -1,16 +1,12 @@
 package wtf.casper.storageapi.misc;
 
 import com.zaxxer.hikari.HikariDataSource;
-import lombok.SneakyThrows;
 import wtf.casper.storageapi.StatelessFieldStorage;
-import wtf.casper.storageapi.id.StorageSerialized;
 import wtf.casper.storageapi.id.Transient;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.utils.Constants;
-import wtf.casper.storageapi.utils.ReflectionUtil;
 import wtf.casper.storageapi.utils.UnsafeConsumer;
 
-import javax.annotation.Nullable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
@@ -22,15 +18,15 @@ import java.util.logging.Logger;
 
 public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, ConstructableValue<K, V> {
 
-    HikariDataSource getDataSource();
+    HikariDataSource dataSource();
 
-    String getTable();
+    String table();
 
     Logger logger();
 
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<PreparedStatement> statement, final UnsafeConsumer<ResultSet> result) {
         return CompletableFuture.supplyAsync(() -> {
-            try (final Connection connection = this.getDataSource().getConnection()) {
+            try (final Connection connection = this.dataSource().getConnection()) {
                 try (final PreparedStatement prepared = connection.prepareStatement(query)) {
                     statement.accept(prepared);
                     final ResultSet resultSet = prepared.executeQuery();
@@ -59,7 +55,7 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
     }
 
     default void execute(final String statement, final UnsafeConsumer<PreparedStatement> consumer) {
-        try (final Connection connection = this.getDataSource().getConnection()) {
+        try (final Connection connection = this.dataSource().getConnection()) {
             try (final PreparedStatement prepared = connection.prepareStatement(statement)) {
                 consumer.accept(prepared);
                 prepared.execute();
@@ -79,7 +75,7 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
     }
 
     default void executeQuery(final String statement, final UnsafeConsumer<PreparedStatement> consumer) {
-        try (final Connection connection = this.getDataSource().getConnection()) {
+        try (final Connection connection = this.dataSource().getConnection()) {
             try (final PreparedStatement prepared = connection.prepareStatement(statement)) {
                 consumer.accept(prepared);
                 prepared.executeQuery();
@@ -99,7 +95,7 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
     }
 
     default void executeUpdate(final String statement, final UnsafeConsumer<PreparedStatement> consumer) {
-        try (final Connection connection = this.getDataSource().getConnection()) {
+        try (final Connection connection = this.dataSource().getConnection()) {
             try (final PreparedStatement prepared = connection.prepareStatement(statement)) {
                 consumer.accept(prepared);
                 prepared.executeUpdate();
@@ -113,36 +109,6 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
         }
     }
 
-    default void addColumn(final String column, final String type) {
-        this.execute("ALTER TABLE " + getTable() + " ADD COLUMN " + column + " " + type + ";");
-    }
-
-    default boolean requiresSubTable(String parent, Field field) {
-        return Iterable.class.isAssignableFrom(field.getType()) || Map.class.isAssignableFrom(field.getType()) || field.getType().isArray();
-    }
-
-    default void createSubTable(String parent, Field field) {
-        if (Iterable.class.isAssignableFrom(field.getType())) {
-            Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
-            if (genericType == null) {
-                throw new IllegalStateException("Could not find generic type for " + field.getType().getName());
-            }
-            this.execute("CREATE TABLE IF NOT EXISTS " + getTable() + "_" + parent + "_" + field.getName() + " (" + createSubTables(field, null, field.getName() + ".") + ");");
-        } else if (field.getType().isArray()) {
-            Class<?> componentType = field.getType().getComponentType();
-            if (componentType == null) {
-                throw new IllegalStateException("Could not find component type for " + field.getType().getName());
-            }
-            this.execute("CREATE TABLE IF NOT EXISTS " + getTable() + "_" + parent + "_" + field.getName() + " (" + createSubTables(field, null, field.getName() + ".") + ");");
-        } else if (Map.class.isAssignableFrom(field.getType())) {
-            Class<?> genericType = ReflectionUtil.getGenericType(field, 1);
-            if (genericType == null) {
-                throw new IllegalStateException("Could not find generic type for " + field.getType().getName());
-            }
-            this.execute("CREATE TABLE IF NOT EXISTS " + getTable() + "_" + parent + "_" + field.getName() + " (" + createSubTables(field, null, field.getName() + ".") + ");");
-        }
-    }
-
     default List<Field> getFields(Class<?> clazz) {
         return Arrays.stream(clazz.getDeclaredFields())
                 .filter(field -> !field.isAnnotationPresent(Transient.class))
@@ -151,514 +117,241 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
                 .toList();
     }
 
-    /**
-     * Will scan the class for fields and add them to the database if they don't exist
-     */
-    default void scanForMissingColumns() {
-        List<Field> fields = getFields(value());
-
-        for (Field declaredField : fields) {
-            declaredField.setAccessible(true);
-            Map<String, String> columns = new HashMap<>();
-
-            if (Iterable.class.isAssignableFrom(declaredField.getType())) {
-                Class<?> genericType = ReflectionUtil.getGenericType(declaredField, 0);
-                if (genericType == null) {
-                    throw new IllegalStateException("Could not find generic type for " + declaredField.getType().getName());
-                }
-                columns.putAll(scanForMissingColumnsSub(declaredField, null, declaredField.getName() + "."));
-            } else if (declaredField.getType().isArray()) {
-                Class<?> componentType = declaredField.getType().getComponentType();
-                if (componentType == null) {
-                    throw new IllegalStateException("Could not find component type for " + declaredField.getType().getName());
-                }
-                columns.putAll(scanForMissingColumnsSub(declaredField, null, declaredField.getName() + "."));
-            } else if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
-                columns.putAll(scanForMissingColumnsSub(declaredField, null, declaredField.getName() + "."));
-            } else {
-                columns.put(declaredField.getName(), getType(declaredField.getType()));
-            }
-
-            this.query("SELECT * FROM " + getTable() + " LIMIT 1;", resultSet -> {
-                columns.forEach((s, s2) -> {
-                    try {
-                        if (resultSet.findColumn(s) == 0) {
-                            this.addColumn(s, s2);
-                        }
-                    } catch (SQLException e) {
-                        this.addColumn(s, s2);
-                    }
-                });
-                resultSet.close();
-            });
-        }
-    }
-
-    default Map<String, String> scanForMissingColumnsSub(Field field, Class<?> clazz, String parentPrefix) {
-        if (field == null && clazz == null) {
-            throw new IllegalStateException("Field and clazz cannot both be null");
-        }
-
-        final Class<?> type = field == null ? clazz : field.getType();
-
-        if (Iterable.class.isAssignableFrom(type)) {
-            if (field == null) {
-                throw new IllegalStateException("Subtable cannot generate subtable from null field");
-            }
-            Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
-            if (genericType == null) {
-                throw new IllegalStateException("Could not find generic type for " + type.getName());
-            }
-            return scanForMissingColumnsSub(null, genericType, parentPrefix + field.getName() + ".");
-        } else if (type.isArray()) {
-            Class<?> componentType = type.getComponentType();
-            if (componentType == null) {
-                throw new IllegalStateException("Could not find component type for " + type.getName());
-            }
-            if (field == null) {
-                throw new IllegalStateException("Subtable cannot generate subtable from null field");
-            }
-
-            return scanForMissingColumnsSub(null, componentType, parentPrefix + field.getName() + ".");
-        }
-
-        List<Field> fields = getFields(type);
-
-        if (fields.isEmpty()) {
-            throw new IllegalStateException("Could not find any fields for " + type.getName());
-        }
-
-        Map<String, String> columns = new HashMap<>();
-        for (Field declaredField : fields) {
-            declaredField.setAccessible(true);
-            final String name = declaredField.getName();
-            String type1 = this.getType(declaredField.getType());
-
-            if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
-                columns.putAll(scanForMissingColumnsSub(declaredField, null, parentPrefix + name + "."));
-            } else {
-                columns.put(parentPrefix + name, type1);
-            }
-        }
-
-        return columns;
-    }
-
-    /**
-     * Generate an SQL Script to create the table based on the class
-     */
-    default String createTableFromObject() {
-        final StringBuilder builder = new StringBuilder();
-
-        List<Field> fields = getFields(value());
-
-        if (fields.size() == 0) {
-            throw new IllegalStateException("Could not find any fields for " + value().getName());
-        }
-
-        builder.append("CREATE TABLE IF NOT EXISTS ").append(getTable()).append(" (");
-
+    default void createTable() {
         String idName = IdUtils.getIdName(value());
+        boolean isUUID = UUID.class.isAssignableFrom(IdUtils.getIdClass(value()));
+        String idType = isUUID ? "VARCHAR(36) NOT NULL" : "VARCHAR(255) NOT NULL";
+        idType = idName + " " + idType + " PRIMARY KEY";
 
-        int index = 0;
-        for (Field declaredField : fields) {
-            declaredField.setAccessible(true);
-            final String name = declaredField.getName();
-            String type = this.getType(declaredField.getType());
-            if (Iterable.class.isAssignableFrom(declaredField.getType())) {
-                Class<?> genericType = ReflectionUtil.getGenericType(declaredField, 0);
-                if (genericType == null) {
-                    throw new IllegalStateException("Could not find generic type for " + declaredField.getType().getName());
-                }
-
-                builder.append(createSubTables(declaredField, null, declaredField.getName() + "."));
-            } else if (declaredField.getType().isArray()) {
-                Class<?> componentType = declaredField.getType().getComponentType();
-                if (componentType == null) {
-                    throw new IllegalStateException("Could not find component type for " + declaredField.getType().getName());
-                }
-
-                builder.append(createSubTables(declaredField, null, declaredField.getName() + "."));
-            } else if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
-                builder.append(createSubTables(declaredField, null, declaredField.getName() + "."));
-            } else {
-                builder.append("`").append(name).append("`").append(" ").append(type);
-                if (name.equals(idName)) {
-                    builder.append(" PRIMARY KEY");
-                }
-            }
-
-            index++;
-            if (index != fields.size()) {
-                builder.append(", ");
-            }
-        }
-        builder.append(");");
-        return builder.toString();
+        execute("CREATE TABLE IF NOT EXISTS " + table() + " (" + idType + ", json JSON NOT NULL);");
     }
 
-    default String createSubTables(@Nullable Field field, @Nullable Class<?> directClazz, String parentPrefix) {
-        if (field == null && directClazz == null) {
-            throw new IllegalStateException("Field and directClazz cannot both be null");
-        }
-
-        final Class<?> clazz = field == null ? directClazz : field.getType();
-
-        if (Iterable.class.isAssignableFrom(clazz)) {
-            if (field == null) {
-                throw new IllegalStateException("Subtable cannot generate subtable from null field");
-            }
-            Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
-            if (genericType == null) {
-                throw new IllegalStateException("Could not find generic type for " + clazz.getName());
-            }
-            return createSubTables(null, genericType, parentPrefix + field.getName() + ".");
-        } else if (clazz.isArray()) {
-            Class<?> componentType = clazz.getComponentType();
-            if (componentType == null) {
-                throw new IllegalStateException("Could not find component type for " + clazz.getName());
-            }
-            if (field == null) {
-                throw new IllegalStateException("Subtable cannot generate subtable from null field");
+    default CompletableFuture<Void> save(V value) {
+        return CompletableFuture.runAsync(() -> {
+            Object id = IdUtils.getId(value());
+            if (id == null) {
+                logger().warning("Could not find id field for " + value().getSimpleName());
+                return;
             }
 
-            return createSubTables(null, componentType, parentPrefix + field.getName() + ".");
-        }
-
-        List<Field> fields = getFields(clazz);
-
-        if (fields.isEmpty()) {
-            throw new IllegalStateException("Could not find any fields for " + clazz.getName());
-        }
-
-        StringBuilder builder = new StringBuilder();
-        int index = 0;
-        for (Field declaredField : fields) {
-            declaredField.setAccessible(true);
-            final String name = declaredField.getName();
-            String type = this.getType(declaredField.getType());
-
-            if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
-                builder.append(createSubTables(declaredField, null, parentPrefix + name + "."));
-            } else {
-                builder.append("`").append(parentPrefix).append(name).append("`").append(" ").append(type);
-            }
-
-            index++;
-            if (index != fields.size()) {
-                builder.append(", ");
-            }
-
-        }
-
-        return builder.toString();
+            String idName = IdUtils.getIdName(value());
+            String json = Constants.getGson().toJson(value);
+            executeUpdate("INSERT INTO " + table() + " (" + idName + ", json) VALUES (?, ?) ON DUPLICATE KEY UPDATE json = ?;", statement -> {
+                statement.setString(1, id.toString());
+                statement.setString(2, json);
+            });
+        });
     }
 
-    /**
-     * This takes an SQL Result Set and parses it into an object
-     */
-    @SneakyThrows
-    default V construct(final ResultSet resultSet) {
-        final V value = constructValue();
-        List<Field> fields = getFields(value());
-
-        for (Field declaredField : fields) {
-            declaredField.setAccessible(true);
-            if (declaredField.isAnnotationPresent(StorageSerialized.class)) {
-                final String name = declaredField.getName();
-                final Object object = constructSubObject(name, declaredField.getType(), resultSet);
-                declaredField.setAccessible(true);
-                declaredField.set(value, object);
-                continue;
-            }
-
-            final String name = declaredField.getName();
-            final Object object = resultSet.getObject(name);
-
-            if (declaredField.getType() == UUID.class && object instanceof String) {
-                ReflectionUtil.setPrivateField(value, name, UUID.fromString((String) object));
-                continue;
-            } else if (declaredField.getType().isEnum() && object instanceof String) {
-                Enum<?> enumValue = Enum.valueOf((Class<? extends Enum>) declaredField.getType(), (String) object);
-                ReflectionUtil.setPrivateField(value, name, enumValue);
-                continue;
-            }
-
-            ReflectionUtil.setPrivateField(value, name, object);
-        }
-
-        return value;
-    }
-
-    default Object constructSubObject(String name, Class<?> clazz, ResultSet resultSet) {
-        Map<String, Object> subResultSet = new HashMap<>();
-        List<Field> fields = getFields(clazz);
-        try {
-            for (Field field : fields) {
-                field.setAccessible(true);
-                if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
-                    Object object = constructSubObject(name + "." + field.getName(), field.getType(), resultSet);
-                    subResultSet.put(field.getName(), object);
-                    continue;
-                }
-
-                Object object = resultSet.getObject(name + "." + field.getName());
-                subResultSet.put(field.getName(), object);
-            }
-
-            Object o = Constants.OBJENESIS_STD.newInstance(clazz);
-            for (Map.Entry<String, Object> entry : subResultSet.entrySet()) {
-                ReflectionUtil.setPrivateField(o, entry.getKey(), entry.getValue());
-            }
-            return o;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    default String getUpdateValues() {
-        final StringBuilder builder = new StringBuilder();
-        int i = 0;
-
-        List<Field> fields = getFields(value());
-
-        for (final Field field : fields) {
-            field.setAccessible(true);
-            if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
-                builder.append(getUpdateValuesSub(field, null, field.getName() + "."));
-            } else {
-                builder.append("`").append(field.getName()).append("` = excluded.`").append(field.getName()).append("`");
-            }
-
-            if (i != fields.size() - 1) {
-                builder.append(", ");
-            }
-
-            i++;
-        }
-
-        return builder.toString();
-    }
-
-    default String getUpdateValuesSub(Field field, Class<?> clazz, String parentPrefix) {
-        if (field == null && clazz == null) {
-            throw new IllegalStateException("Field and clazz cannot both be null");
-        }
-
-        final Class<?> type = field == null ? clazz : field.getType();
-
-        if (Iterable.class.isAssignableFrom(type)) {
-            if (field == null) {
-                throw new IllegalStateException("Subtable cannot generate subtable from null field");
-            }
-            Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
-            if (genericType == null) {
-                throw new IllegalStateException("Could not find generic type for " + type.getName());
-            }
-            return getUpdateValuesSub(null, genericType, parentPrefix + field.getName() + ".");
-        } else if (type.isArray()) {
-            Class<?> componentType = type.getComponentType();
-            if (componentType == null) {
-                throw new IllegalStateException("Could not find component type for " + type.getName());
-            }
-            if (field == null) {
-                throw new IllegalStateException("Subtable cannot generate subtable from null field");
-            }
-
-            return getUpdateValuesSub(null, componentType, parentPrefix + field.getName() + ".");
-        }
-
-        List<Field> fields = getFields(type);
-
-        if (fields.isEmpty()) {
-            throw new IllegalStateException("Could not find any fields for " + type.getName());
-        }
-
-        StringBuilder builder = new StringBuilder();
-        for (Field declaredField : fields) {
-            declaredField.setAccessible(true);
-            final String name = declaredField.getName();
-            String type1 = this.getType(declaredField.getType());
-
-            if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
-                builder.append(getUpdateValuesSub(declaredField, null, parentPrefix + name + "."));
-            } else {
-                builder.append("`").append(parentPrefix).append(name).append("`").append(" ").append(type1);
-            }
-        }
-
-        return builder.toString();
-    }
-
-    /**
-     * Generates an SQL String for the columns associated with a value class.
-     */
-    default String getColumns() {
-        final StringBuilder builder = new StringBuilder();
-
-        List<Field> fields = getFields(value());
-
-        for (final Field field : fields) {
-            field.setAccessible(true);
-            if (Iterable.class.isAssignableFrom(field.getType())) {
-                Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
-                if (genericType == null) {
-                    throw new IllegalStateException("Could not find generic type for " + field.getType().getName());
-                }
-                builder.append(getSubColumns(field, null, field.getName() + "."));
-            } else if (field.getType().isArray()) {
-                Class<?> componentType = field.getType().getComponentType();
-                if (componentType == null) {
-                    throw new IllegalStateException("Could not find component type for " + field.getType().getName());
-                }
-                builder.append(getSubColumns(field, null, field.getName() + "."));
-            } else if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
-                builder.append(getSubColumns(field, null, field.getName() + "."));
-            } else {
-                builder.append("`").append(field.getName()).append("`").append(",");
-            }
-        }
-
-        return builder.substring(0, builder.length() - 1);
-    }
-
-    default String getSubColumns(@Nullable Field field, @Nullable Class<?> directClazz, String parentPrefix) {
-        if (field == null && directClazz == null) {
-            throw new IllegalStateException("Field and directClazz cannot both be null");
-        }
-
-        final Class<?> clazz = field == null ? directClazz : field.getType();
-
-        if (Iterable.class.isAssignableFrom(clazz)) {
-            if (field == null) {
-                throw new IllegalStateException("Subtable cannot generate subtable from null field");
-            }
-            Class<?> genericType = ReflectionUtil.getGenericType(field, 0);
-            if (genericType == null) {
-                throw new IllegalStateException("Could not find generic type for " + clazz.getName());
-            }
-            return getSubColumns(null, genericType, parentPrefix + field.getName() + ".");
-        } else if (clazz.isArray()) {
-            Class<?> componentType = clazz.getComponentType();
-            if (componentType == null) {
-                throw new IllegalStateException("Could not find component type for " + clazz.getName());
-            }
-            if (field == null) {
-                throw new IllegalStateException("Subtable cannot generate subtable from null field");
-            }
-
-            return getSubColumns(null, componentType, parentPrefix + field.getName() + ".");
-        }
-
-        List<Field> fields = getFields(clazz);
-
-        if (fields.isEmpty()) {
-            throw new IllegalStateException("Could not find any fields for " + clazz.getName());
-        }
-
-        StringBuilder builder = new StringBuilder();
-        for (Field declaredField : fields) {
-            declaredField.setAccessible(true);
-            final String name = declaredField.getName();
-            String type = this.getType(declaredField.getType());
-
-            if (declaredField.getType().isAnnotationPresent(StorageSerialized.class)) {
-                builder.append(getSubColumns(declaredField, null, parentPrefix + name + "."));
-            } else {
-                builder.append("`").append(parentPrefix).append(name).append("`").append(" ").append(type);
-            }
-        }
-
-        return builder.toString();
-    }
-
-
-    /**
-     * Converts a Java class to an SQL type.
-     */
-    default String getType(Class<?> type) {
-        return switch (type.getName()) {
-            case "java.lang.String" -> "VARCHAR(255)";
-            case "java.lang.Integer", "int" -> "INT";
-            case "java.lang.Long", "long" -> "BIGINT";
-            case "java.lang.Boolean", "boolean" -> "BOOLEAN";
-            case "java.lang.Double", "double" -> "DOUBLE";
-            case "java.lang.Float", "float" -> "FLOAT";
-            case "java.lang.Short", "short" -> "SMALLINT";
-            case "java.lang.Byte", "byte" -> "TINYINT";
-            case "java.lang.Character", "char" -> "CHAR";
-            case "java.util.UUID" -> "VARCHAR(36)";
-            default -> "VARCHAR(255)";
-        };
-    }
-
-
-    /**
-     * Generates an SQL String for inserting a value into the database.
-     */
-    default String getValues(Object value, Class<?> clazz) {
-        final StringBuilder builder = new StringBuilder();
-        int i = 0;
-
-        List<Field> fields = getFields(clazz);
-
-        for (final Field field : fields) {
-            field.setAccessible(true);
-            Object privateField = ReflectionUtil.getPrivateField(value, field.getName());
-            if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
+    default CompletableFuture<List<V>> getField(String fieldPath) {
+        return CompletableFuture.supplyAsync(() -> {
+            List<V> values = new ArrayList<>();
+            query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + fieldPath + "') IS NOT NULL;", statement -> {
+            }, resultSet -> {
                 try {
-                    Object o = field.get(value);
-                    builder.append(getValues(o, field.getType())).append(", ");
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);
+                    while (resultSet.next()) {
+                        String json = resultSet.getString("json");
+                        V value = Constants.getGson().fromJson(json, value());
+                        values.add(value);
+                    }
+                } catch (SQLException e) {
+                    e.printStackTrace();
                 }
-                continue;
-            }
-
-            boolean shouldHaveQuotes = shouldHaveQuotes(privateField);
-
-            if (shouldHaveQuotes) {
-                builder.append("'");
-            }
-
-            if (privateField instanceof Map<?, ?> map) {
-                if (map.isEmpty()) {
-                    builder.append("NULL");
-                }
-            } else if (privateField instanceof List<?> list) {
-                if (list.isEmpty()) {
-                    builder.append("''");
-                }
-            } else {
-                builder.append(privateField);
-            }
-
-            if (shouldHaveQuotes) {
-                builder.append("'");
-            }
-
-            if (i != fields.size() - 1) {
-                builder.append(", ");
-            }
-            i++;
-        }
-
-        String string = builder.toString();
-        if (string.endsWith(", ")) {
-            string = string.substring(0, string.length() - 2);
-        }
-        return string;
+            });
+            return values;
+        });
     }
 
-    default boolean shouldHaveQuotes(Object value) {
-        if (value instanceof Enum<?>) {
-            return true;
-        }
-        return switch (value.getClass().getName()) {
-            case "java.lang.String", "java.util.UUID" -> true;
-            default -> false;
-        };
+    default void _equals(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') = ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void _contains(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') LIKE ?;", statement -> {
+            setStatement(statement, 1, "%" + value + "%");
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void startsWith(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') LIKE ?;", statement -> {
+            setStatement(statement, 1, value + "%");
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void endsWith(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') LIKE ?;", statement -> {
+            setStatement(statement, 1, "%" + value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void greaterThan(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') > ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void lessThan(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') < ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void greaterThanOrEqualTo(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') >= ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void lessThanOrEqualTo(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') <= ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void notEquals(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') != ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void notContains(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') NOT LIKE ?;", statement -> {
+            setStatement(statement, 1, "%" + value + "%");
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void notStartsWIth(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') NOT LIKE ?;", statement -> {
+            setStatement(statement, 1, value + "%");
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    default void notEndsWith(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') NOT LIKE ?;", statement -> {
+            setStatement(statement, 1, "%" + value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String json = resultSet.getString("json");
+                    V v = Constants.getGson().fromJson(json, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     default void setStatement(PreparedStatement statement, int i, Object value) {
@@ -825,159 +518,5 @@ public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, Construc
                 }
             }
         }
-    }
-
-    default void _equals(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " = ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, value);
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void _contains(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " LIKE ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, "%" + value + "%");
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void startsWith(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " LIKE ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, value + "%");
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void endsWith(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " LIKE ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, "%" + value);
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void greaterThan(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " > ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, value);
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void lessThan(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " < ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, value);
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void greaterThanOrEqualTo(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " >= ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, value);
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void lessThanOrEqualTo(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " <= ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, value);
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void in(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " IN (?)", preparedStatement -> {
-            setStatement(preparedStatement, 1, value);
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void notEquals(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " != ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, value);
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void notContains(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " NOT LIKE ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, "%" + value + "%");
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void notStartsWIth(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " NOT LIKE ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, value + "%");
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void notEndsWith(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " NOT LIKE ?", preparedStatement -> {
-            setStatement(preparedStatement, 1, "%" + value);
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
-    }
-
-    default void notIn(String field, Object value, List<V> values) {
-        this.query("SELECT * FROM " + getTable() + " WHERE " + field + " NOT IN (?)", preparedStatement -> {
-            setStatement(preparedStatement, 1, value);
-        }, resultSet -> {
-            while (resultSet.next()) {
-                values.add(this.construct(resultSet));
-            }
-            resultSet.close();
-        }).join();
     }
 }

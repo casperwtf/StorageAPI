@@ -14,6 +14,7 @@ import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.ISQLStorage;
+import wtf.casper.storageapi.utils.Constants;
 
 import java.lang.reflect.Field;
 import java.sql.SQLException;
@@ -56,12 +57,11 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
         this.ds.addDataSourceProperty("user", username);
         this.ds.addDataSourceProperty("password", password);
         this.ds.setAutoCommit(true);
-        this.execute(createTableFromObject());
-        this.scanForMissingColumns();
+        createTable();
     }
 
     @Override
-    public HikariDataSource getDataSource() {
+    public HikariDataSource dataSource() {
         return ds;
     }
 
@@ -71,7 +71,7 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
     }
 
     @Override
-    public String getTable() {
+    public String table() {
         return table;
     }
 
@@ -150,25 +150,6 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
     }
 
     @Override
-    public CompletableFuture<Void> save(final V value) {
-        return CompletableFuture.runAsync(() -> {
-            if (this.ds.isClosed()) {
-                return;
-            }
-            Object id = IdUtils.getId(valueClass, value);
-            if (id == null) {
-                log.warning("Could not find id field for " + keyClass.getSimpleName());
-                return;
-            }
-
-            cache.put((K) id, value);
-
-            String values = this.getValues(value, valueClass);
-            this.executeUpdate("INSERT INTO " + this.table + " (" + this.getColumns() + ") VALUES (" + values + ") ON DUPLICATE KEY UPDATE " + getUpdateValues());
-        });
-    }
-
-    @Override
     public CompletableFuture<Void> remove(final V value) {
         return CompletableFuture.runAsync(() -> {
             Field idField;
@@ -212,7 +193,7 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
             }, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(this.construct(resultSet));
+                        values.add(Constants.getGson().fromJson(resultSet.getString("json"), this.valueClass));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();

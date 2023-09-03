@@ -6,17 +6,19 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.java.Log;
 import org.bson.json.JsonWriterSettings;
 import org.objenesis.ObjenesisStd;
 import wtf.casper.storageapi.id.Transient;
 
+@Log
 public class Constants {
     public static final ObjenesisStd OBJENESIS_STD = new ObjenesisStd(true);
     public final static boolean DEBUG = false;
 
     public static void debug(String message) {
         if (DEBUG) {
-            System.out.println(message);
+            log.fine(message);
         }
     }
 

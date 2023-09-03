@@ -12,6 +12,7 @@ import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ISQLStorage;
+import wtf.casper.storageapi.utils.Constants;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -46,8 +47,7 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
         this.ds.setConnectionTimeout(120000);
         this.ds.setLeakDetectionThreshold(300000);
         this.ds.setAutoCommit(true);
-        this.execute(createTableFromObject());
-        this.scanForMissingColumns();
+        createTable();
     }
 
     @SneakyThrows
@@ -62,12 +62,11 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
         this.ds.setConnectionTimeout(120000);
         this.ds.setLeakDetectionThreshold(300000);
         this.ds.setAutoCommit(true);
-        this.execute(createTableFromObject());
-        this.scanForMissingColumns();
+        createTable();
     }
 
     @Override
-    public HikariDataSource getDataSource() {
+    public HikariDataSource dataSource() {
         return ds;
     }
 
@@ -77,7 +76,7 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
     }
 
     @Override
-    public String getTable() {
+    public String table() {
         return table;
     }
 
@@ -156,25 +155,6 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
     }
 
     @Override
-    public CompletableFuture<Void> save(final V value) {
-        return CompletableFuture.runAsync(() -> {
-            if (this.ds.isClosed()) {
-                logger().warning("Could not save " + valueClass.getSimpleName() + " because the data source is closed.");
-                return;
-            }
-            Object id = IdUtils.getId(valueClass, value);
-            if (id == null) {
-                log.warning("Could not find id field for " + keyClass.getSimpleName());
-                return;
-            }
-
-            cache.put((K) id, value);
-
-            this.executeUpdate("INSERT INTO " + this.table + " VALUES (" + this.getValues(value, valueClass) + ") ON CONFLICT(" + IdUtils.getIdName(valueClass) + ") DO UPDATE SET " + this.getUpdateValues() + ";");
-        });
-    }
-
-    @Override
     public CompletableFuture<Void> remove(final V value) {
         return CompletableFuture.runAsync(() -> {
             Field idField;
@@ -210,7 +190,7 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
             }, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(this.construct(resultSet));
+                        values.add(Constants.getGson().fromJson(resultSet.getString("json"), this.valueClass));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();
