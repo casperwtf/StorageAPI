@@ -22,6 +22,7 @@ credentials = Credentials.of(
 
 # Usage of KVStorage
 KVStorage is a key value storage system. It is a simple way to store data.
+This supports all storage types (Json, MongoDB, SQL, MariaDB, SQLite)
 ```java
 //Create a new KVStorage instance
 KVStorage<K, V> storage;
