@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
-public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, ConstructableValue<K, V> {
+public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, ConstructableValue<K, V> {
 
     HikariDataSource dataSource();
 

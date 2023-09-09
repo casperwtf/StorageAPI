@@ -1,14 +1,17 @@
-package wtf.casper.storageapi.impl.statelessfstorage;
+package wtf.casper.storageapi.impl.kvstorage;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.SneakyThrows;
 import lombok.extern.java.Log;
-import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.FilterType;
-import wtf.casper.storageapi.SortingType;
+import wtf.casper.storageapi.*;
+import wtf.casper.storageapi.cache.Cache;
+import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
+import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.ISQLFStorage;
+import wtf.casper.storageapi.misc.ISQLKVStorage;
 import wtf.casper.storageapi.utils.Constants;
 
 import java.lang.reflect.Field;
@@ -17,38 +20,41 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 @Log
-public class StatelessSQLFStorage<K, V> implements ISQLFStorage<K, V> {
+public abstract class MariaDBKVStorage<K, V> implements ConstructableValue<K, V>, KVStorage<K, V>, ISQLKVStorage<K, V> {
 
+    protected final Class<K> keyClass;
+    protected final Class<V> valueClass;
     private final HikariDataSource ds;
-    private final Class<K> keyClass;
-    private final Class<V> valueClass;
     private final String table;
+    private Cache<K, V> cache = new CaffeineCache<>(Caffeine.newBuilder()
+            .expireAfterWrite(10, TimeUnit.MINUTES)
+            .build());
 
-    public StatelessSQLFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
+    public MariaDBKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
         this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
-    @SneakyThrows
-    public StatelessSQLFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
-        if (true) {
-            throw new IllegalStateException(this.getClass().getSimpleName() + " is not implemented yet");
-        }
+    public MariaDBKVStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
+        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+    }
 
+
+    @SneakyThrows
+    public MariaDBKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;
         this.ds = new HikariDataSource();
         this.ds.setMaximumPoolSize(20);
-        this.ds.setDriverClassName("com.mysql.cj.jdbc.Driver");
-        this.ds.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&autoReconnect=true&useSSL=false");
+        this.ds.setDriverClassName("org.mariadb.jdbc.Driver");
+        this.ds.setJdbcUrl("jdbc:mariadb://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&autoReconnect=true&useSSL=false");
         this.ds.addDataSourceProperty("user", username);
         this.ds.addDataSourceProperty("password", password);
-        this.ds.setConnectionTimeout(300000);
-        this.ds.setConnectionTimeout(120000);
-        this.ds.setLeakDetectionThreshold(300000);
+        this.ds.setAutoCommit(true);
         createTable();
     }
 
@@ -78,50 +84,20 @@ public class StatelessSQLFStorage<K, V> implements ISQLFStorage<K, V> {
     }
 
     @Override
+    public Cache<K, V> cache() {
+        return this.cache;
+    }
+
+    @Override
+    public void cache(Cache<K, V> cache) {
+        this.cache = cache;
+    }
+
+    @Override
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             execute("DELETE FROM " + this.table);
         });
-    }
-
-    @SneakyThrows
-    public CompletableFuture<Collection<V>> get(final String field, Object value, FilterType filterType, SortingType sortingType) {
-        return CompletableFuture.supplyAsync(() -> {
-            final List<V> values = new ArrayList<>();
-            if (!filterType.isApplicable(value.getClass())) {
-                log.warning("Filter type " + filterType.name() + " is not applicable to " + value.getClass().getSimpleName());
-                return values;
-            }
-
-            switch (filterType) {
-                case EQUALS -> this._equals(field, value, values);
-                case CONTAINS -> this._contains(field, value, values);
-                case STARTS_WITH -> this.startsWith(field, value, values);
-                case ENDS_WITH -> this.endsWith(field, value, values);
-                case GREATER_THAN -> this.greaterThan(field, value, values);
-                case LESS_THAN -> this.lessThan(field, value, values);
-                case GREATER_THAN_OR_EQUAL_TO -> this.greaterThanOrEqualTo(field, value, values);
-                case LESS_THAN_OR_EQUAL_TO -> this.lessThanOrEqualTo(field, value, values);
-                case NOT_EQUALS -> this.notEquals(field, value, values);
-                case NOT_CONTAINS -> this.notContains(field, value, values);
-                case NOT_STARTS_WITH -> this.notStartsWIth(field, value, values);
-                case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
-            }
-
-            return values;
-        });
-    }
-
-    @Override
-    public CompletableFuture<V> get(K key) {
-        return getFirst(IdUtils.getIdName(this.valueClass), key);
-    }
-
-    @Override
-    public CompletableFuture<V> getFirst(String field, Object value, FilterType filterType) {
-        return CompletableFuture.supplyAsync(() ->
-                this.get(field, value, filterType, SortingType.NONE).join().stream().findFirst().orElse(null)
-        );
     }
 
     @Override
@@ -133,6 +109,7 @@ public class StatelessSQLFStorage<K, V> implements ISQLFStorage<K, V> {
             } catch (IdNotFoundException e) {
                 throw new RuntimeException(e);
             }
+            this.cache.invalidate((K) IdUtils.getId(this.valueClass, value));
             String field = idField.getName();
             this.execute("DELETE FROM " + this.table + " WHERE `" + field + "` = ?;", statement -> {
                 statement.setString(1, IdUtils.getId(this.valueClass, value).toString());
@@ -144,6 +121,7 @@ public class StatelessSQLFStorage<K, V> implements ISQLFStorage<K, V> {
     @SneakyThrows
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
+            this.saveAll(this.cache.asMap().values());
         });
     }
 
@@ -176,4 +154,5 @@ public class StatelessSQLFStorage<K, V> implements ISQLFStorage<K, V> {
             return values;
         });
     }
+
 }

@@ -20,19 +20,22 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
 @Log
-public class StatelessSQLFStorage<K, V> implements ISQLFStorage<K, V> {
-
+public class StatelessMariaDBFStorage<K, V> implements ISQLFStorage<K, V> {
     private final HikariDataSource ds;
     private final Class<K> keyClass;
     private final Class<V> valueClass;
     private final String table;
 
-    public StatelessSQLFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
+    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
         this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
+    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
+        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+    }
+
     @SneakyThrows
-    public StatelessSQLFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
+    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
         if (true) {
             throw new IllegalStateException(this.getClass().getSimpleName() + " is not implemented yet");
         }
@@ -42,13 +45,11 @@ public class StatelessSQLFStorage<K, V> implements ISQLFStorage<K, V> {
         this.table = table;
         this.ds = new HikariDataSource();
         this.ds.setMaximumPoolSize(20);
-        this.ds.setDriverClassName("com.mysql.cj.jdbc.Driver");
-        this.ds.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&autoReconnect=true&useSSL=false");
+        this.ds.setDriverClassName("org.mariadb.jdbc.Driver");
+        this.ds.setJdbcUrl("jdbc:mariadb://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&autoReconnect=true&useSSL=false");
         this.ds.addDataSourceProperty("user", username);
         this.ds.addDataSourceProperty("password", password);
-        this.ds.setConnectionTimeout(300000);
-        this.ds.setConnectionTimeout(120000);
-        this.ds.setLeakDetectionThreshold(300000);
+        this.ds.setAutoCommit(true);
         createTable();
     }
 

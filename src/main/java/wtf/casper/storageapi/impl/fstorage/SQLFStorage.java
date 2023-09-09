@@ -13,7 +13,7 @@ import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
-import wtf.casper.storageapi.misc.ISQLStorage;
+import wtf.casper.storageapi.misc.ISQLFStorage;
 import wtf.casper.storageapi.utils.Constants;
 
 import java.lang.reflect.Field;
@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 @Log
-public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, FieldStorage<K, V>, ISQLStorage<K, V> {
+public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, FieldStorage<K, V>, ISQLFStorage<K, V> {
 
     protected final Class<K> keyClass;
     protected final Class<V> valueClass;
@@ -42,6 +42,10 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
 
     @SneakyThrows
     public SQLFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
+        if (true) {
+            throw new IllegalStateException(this.getClass().getSimpleName() + " is not implemented yet");
+        }
+
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;

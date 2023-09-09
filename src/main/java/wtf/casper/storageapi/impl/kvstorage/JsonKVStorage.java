@@ -1,12 +1,9 @@
-package wtf.casper.storageapi.impl.fstorage;
+package wtf.casper.storageapi.impl.kvstorage;
 
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.SneakyThrows;
-import org.jetbrains.annotations.Nullable;
-import wtf.casper.storageapi.FieldStorage;
-import wtf.casper.storageapi.FilterType;
-import wtf.casper.storageapi.SortingType;
+import wtf.casper.storageapi.KVStorage;
 import wtf.casper.storageapi.cache.Cache;
 import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.utils.IdUtils;
@@ -18,12 +15,10 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.Writer;
 import java.lang.reflect.Array;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, ConstructableValue<K, V> {
+public abstract class JsonKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue<K, V> {
 
     private final File file;
     private final Class<K> keyClass;
@@ -31,7 +26,7 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     private Cache<K, V> cache = new CaffeineCache<>(Caffeine.newBuilder().build());
 
     @SneakyThrows
-    public JsonFStorage(final File file, final Class<K> keyClass, final Class<V> valueClass) {
+    public JsonKVStorage(final File file, final Class<K> keyClass, final Class<V> valueClass) {
         if (!file.exists()) {
             file.getParentFile().mkdirs();
             if (!file.createNewFile()) {
@@ -80,24 +75,8 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     }
 
     @Override
-    public CompletableFuture<Collection<V>> get(String field, Object value, FilterType filterType, SortingType sortingType) {
-        return CompletableFuture.supplyAsync(() -> {
-            Collection<V> values = cache().asMap().values();
-            return sortingType.sort(filter(values, field, value, filterType), field);
-        });
-    }
-
-    @Override
     public CompletableFuture<V> get(K key) {
         return CompletableFuture.supplyAsync(() -> cache.getIfPresent(key));
-    }
-
-    @Override
-    public CompletableFuture<V> getFirst(String field, Object value, FilterType filterType) {
-        return CompletableFuture.supplyAsync(() -> {
-            Collection<V> values = cache().asMap().values();
-            return filterFirst(values, field, value, filterType);
-        });
     }
 
     @Override
@@ -134,23 +113,5 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     @Override
     public CompletableFuture<Collection<V>> allValues() {
         return CompletableFuture.supplyAsync(() -> cache.asMap().values());
-    }
-
-    private Collection<V> filter(final Collection<V> values, final String field, final Object value, FilterType filterType) {
-        List<V> list = new ArrayList<>();
-        for (final V v : values) {
-            if (filterType.passes(v, field, value)) {
-                list.add(v);
-            }
-        }
-        return list;
-    }
-
-    @Nullable
-    private V filterFirst(final Collection<V> values, final String field, final Object value, FilterType filterType) {
-        for (final V v : values) {
-            if (filterType.passes(v, field, value)) return v;
-        }
-        return null;
     }
 }

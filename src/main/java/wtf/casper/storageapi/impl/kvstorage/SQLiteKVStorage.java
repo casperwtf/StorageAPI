@@ -1,4 +1,4 @@
-package wtf.casper.storageapi.impl.fstorage;
+package wtf.casper.storageapi.impl.kvstorage;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.zaxxer.hikari.HikariDataSource;
@@ -6,12 +6,14 @@ import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import wtf.casper.storageapi.FieldStorage;
 import wtf.casper.storageapi.FilterType;
+import wtf.casper.storageapi.KVStorage;
 import wtf.casper.storageapi.SortingType;
 import wtf.casper.storageapi.cache.Cache;
 import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ISQLFStorage;
+import wtf.casper.storageapi.misc.ISQLKVStorage;
 import wtf.casper.storageapi.utils.Constants;
 
 import java.io.File;
@@ -25,7 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 @Log
-public abstract class SQLiteFStorage<K, V> implements ISQLFStorage<K, V>, FieldStorage<K, V> {
+public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVStorage<K, V> {
 
     protected final Class<K> keyClass;
     protected final Class<V> valueClass;
@@ -36,11 +38,7 @@ public abstract class SQLiteFStorage<K, V> implements ISQLFStorage<K, V>, FieldS
             .build());
 
     @SneakyThrows
-    public SQLiteFStorage(final Class<K> keyClass, final Class<V> valueClass, final File file, String table) {
-        if (true) {
-            throw new IllegalStateException(this.getClass().getSimpleName() + " is not implemented yet");
-        }
-
+    public SQLiteKVStorage(final Class<K> keyClass, final Class<V> valueClass, final File file, String table) {
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;
@@ -55,7 +53,7 @@ public abstract class SQLiteFStorage<K, V> implements ISQLFStorage<K, V>, FieldS
     }
 
     @SneakyThrows
-    public SQLiteFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String connection) {
+    public SQLiteKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String connection) {
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;
@@ -109,53 +107,6 @@ public abstract class SQLiteFStorage<K, V> implements ISQLFStorage<K, V>, FieldS
         return CompletableFuture.runAsync(() -> {
             execute("DELETE FROM " + this.table);
         });
-    }
-
-    @SneakyThrows
-    public CompletableFuture<Collection<V>> get(final String field, Object value, FilterType filterType, SortingType sortingType) {
-        return CompletableFuture.supplyAsync(() -> {
-            final List<V> values = new ArrayList<>();
-            if (!filterType.isApplicable(value.getClass())) {
-                log.warning("Filter type " + filterType.name() + " is not applicable to " + value.getClass().getSimpleName());
-                return values;
-            }
-
-            switch (filterType) {
-                case EQUALS -> this._equals(field, value, values);
-                case CONTAINS -> this._contains(field, value, values);
-                case STARTS_WITH -> this.startsWith(field, value, values);
-                case ENDS_WITH -> this.endsWith(field, value, values);
-                case GREATER_THAN -> this.greaterThan(field, value, values);
-                case LESS_THAN -> this.lessThan(field, value, values);
-                case GREATER_THAN_OR_EQUAL_TO -> this.greaterThanOrEqualTo(field, value, values);
-                case LESS_THAN_OR_EQUAL_TO -> this.lessThanOrEqualTo(field, value, values);
-                case NOT_EQUALS -> this.notEquals(field, value, values);
-                case NOT_CONTAINS -> this.notContains(field, value, values);
-                case NOT_STARTS_WITH -> this.notStartsWIth(field, value, values);
-                case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
-            }
-
-            for (V v : values) {
-                cache.put((K) IdUtils.getId(valueClass, v), v);
-            }
-
-            return values;
-        });
-    }
-
-    @Override
-    public CompletableFuture<V> get(K key) {
-        if (cache.getIfPresent(key) != null) {
-            return CompletableFuture.completedFuture(cache.getIfPresent(key));
-        }
-        return getFirst(IdUtils.getIdName(this.valueClass), key);
-    }
-
-    @Override
-    public CompletableFuture<V> getFirst(String field, Object value, FilterType filterType) {
-        return CompletableFuture.supplyAsync(() ->
-                this.get(field, value, filterType, SortingType.NONE).join().stream().findFirst().orElse(null)
-        );
     }
 
     @Override
