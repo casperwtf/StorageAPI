@@ -1,5 +1,5 @@
 # Description
-StorageAPI is an easy way to query and store data. We currently support JSON & MongoDB data formats. SQL (SQLite, MariaDB, MySQL) are currently in development.
+StorageAPI is an easy way to query and store data.
 
 StorageAPI is setup to be ran asynchronously, so you don't have to worry about blocking the main thread. This is done through the java completable future API.
 # Create credentials object
