@@ -6,8 +6,6 @@ target/
 data.json
 dependency-reduced-pom.xml
 
-.idea/
-.idea/**
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
@@ -15,6 +13,8 @@ dependency-reduced-pom.xml
 .idea/compiler.xml
 .idea/libraries/
 .idea
+.idea/
+.idea/**
 *.iws
 *.iml
 *.ipr
