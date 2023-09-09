@@ -9,7 +9,7 @@ import wtf.casper.storageapi.utils.ReflectionUtil;
 import java.io.IOException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.*;
+import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
@@ -36,7 +36,7 @@ public interface StatelessKVStorage<K, V> {
             if (this instanceof ConstructableValue<?, ?>) {
                 v = ((ConstructableValue<K, V>) this).constructValue(key);
                 if (v == null) {
-                    throw new RuntimeException("Failed to create default value for " + v.getClass().getSimpleName() + " with key " + key
+                    throw new RuntimeException("Failed to create default value for V with key " + key
                             + ". Please create a constructor in " + v.getClass().getSimpleName() + " for only the key.");
                 }
                 return v;
@@ -48,8 +48,8 @@ public interface StatelessKVStorage<K, V> {
                     return ReflectionUtil.createInstance(keyValueGetter.value(), key);
                 } catch (final Exception e) {
                     e.printStackTrace();
-                    throw new RuntimeException("Failed to create default value for " + v.getClass().getSimpleName() + " with key " + key + ". " +
-                            "Please create a constructor in " + v.getClass().getSimpleName() + " for only the key.", e);
+                    throw new RuntimeException("Failed to create default value for V with key " + key + ". " +
+                            "Please create a constructor in V for only the key.", e);
                 }
             }
 
@@ -61,13 +61,13 @@ public interface StatelessKVStorage<K, V> {
                     return ReflectionUtil.createInstance(aClass, key);
                 }
 
-                throw new RuntimeException("Failed to create default value for " + v.getClass().getSimpleName() + " with key " + key + ". " +
-                        "Please create a constructor in " + v.getClass().getSimpleName() + " for only the key.");
+                throw new RuntimeException("Failed to create default value for V with key " + key + ". " +
+                        "Please create a constructor in V for only the key.");
 
             } catch (Exception e) {
                 e.printStackTrace();
-                throw new RuntimeException("Failed to create default value for " + v.getClass().getSimpleName() + " with key " + key + ". " +
-                        "Please create a constructor in " + v.getClass().getSimpleName() + " for only the key.");
+                throw new RuntimeException("Failed to create default value for V with key " + key + ". " +
+                        "Please create a constructor in V for only the key.");
             }
         });
     }

@@ -37,11 +37,11 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
             .build());
 
     public MariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
-        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
     public MariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
-        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
 
@@ -100,9 +100,7 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
 
     @Override
     public CompletableFuture<Void> deleteAll() {
-        return CompletableFuture.runAsync(() -> {
-            execute("DELETE FROM " + this.table);
-        });
+        return CompletableFuture.runAsync(() -> execute("DELETE FROM " + this.table));
     }
 
     @SneakyThrows

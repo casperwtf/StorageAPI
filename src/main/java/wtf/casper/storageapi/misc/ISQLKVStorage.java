@@ -2,19 +2,14 @@ package wtf.casper.storageapi.misc;
 
 import com.zaxxer.hikari.HikariDataSource;
 import wtf.casper.storageapi.StatelessKVStorage;
-import wtf.casper.storageapi.id.Transient;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.utils.Constants;
 import wtf.casper.storageapi.utils.UnsafeConsumer;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -158,7 +153,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
         return CompletableFuture.supplyAsync(() -> {
             String idName = IdUtils.getIdName(value());
 
-            AtomicReference<V> value = null;
+            AtomicReference<V> value = new AtomicReference<>();
 
             query("SELECT * FROM " + table() + " WHERE `" + idName + "` = ?;", statement -> {
                 statement.setString(1, key.toString());

@@ -118,7 +118,10 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
             try {
-                this.file.delete();
+                boolean delete = this.file.delete();
+                if (!delete) {
+                    System.out.println("Failed to delete file " + this.file.getAbsolutePath());
+                }
                 this.file.createNewFile();
 
                 final Writer writer = new FileWriter(this.file);

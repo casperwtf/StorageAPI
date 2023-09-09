@@ -97,7 +97,10 @@ public abstract class JsonKVStorage<K, V> implements KVStorage<K, V>, Constructa
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
             try {
-                this.file.delete();
+                boolean delete = this.file.delete();
+                if (!delete) {
+                    System.out.println("Failed to delete file " + this.file.getAbsolutePath());
+                }
                 this.file.createNewFile();
 
                 final Writer writer = new FileWriter(this.file);

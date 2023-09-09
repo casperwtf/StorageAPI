@@ -23,7 +23,7 @@ public class StatelessSQLKVStorage<K, V> implements ISQLKVStorage<K, V> {
     private final String table;
 
     public StatelessSQLKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
-        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
     @SneakyThrows

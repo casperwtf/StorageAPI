@@ -1,7 +1,6 @@
 package wtf.casper.storageapi.impl.direct.kvstorage;
 
 import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.impl.fstorage.MongoFStorage;
 import wtf.casper.storageapi.impl.kvstorage.MongoKVStorage;
 import wtf.casper.storageapi.misc.ConstructableValue;
 

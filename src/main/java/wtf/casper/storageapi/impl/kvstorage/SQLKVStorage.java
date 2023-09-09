@@ -5,9 +5,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.FilterType;
 import wtf.casper.storageapi.KVStorage;
-import wtf.casper.storageapi.SortingType;
 import wtf.casper.storageapi.cache.Cache;
 import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
@@ -37,7 +35,7 @@ public abstract class SQLKVStorage<K, V> implements ConstructableValue<K, V>, KV
             .build());
 
     public SQLKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
-        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
     @SneakyThrows

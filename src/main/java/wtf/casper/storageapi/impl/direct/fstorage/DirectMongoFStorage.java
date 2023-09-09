@@ -3,10 +3,8 @@ package wtf.casper.storageapi.impl.direct.fstorage;
 import wtf.casper.storageapi.Credentials;
 import wtf.casper.storageapi.impl.fstorage.MongoFStorage;
 import wtf.casper.storageapi.misc.ConstructableValue;
-import wtf.casper.storageapi.misc.KeyValue;
 
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 public class DirectMongoFStorage<K, V> extends MongoFStorage<K, V> implements ConstructableValue<K, V> {
 

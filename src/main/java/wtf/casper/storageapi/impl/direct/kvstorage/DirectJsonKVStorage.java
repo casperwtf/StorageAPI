@@ -1,6 +1,5 @@
 package wtf.casper.storageapi.impl.direct.kvstorage;
 
-import wtf.casper.storageapi.impl.fstorage.JsonFStorage;
 import wtf.casper.storageapi.impl.kvstorage.JsonKVStorage;
 import wtf.casper.storageapi.misc.ConstructableValue;
 

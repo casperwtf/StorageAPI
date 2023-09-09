@@ -4,13 +4,13 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.SneakyThrows;
 import lombok.extern.java.Log;
-import wtf.casper.storageapi.*;
+import wtf.casper.storageapi.Credentials;
+import wtf.casper.storageapi.KVStorage;
 import wtf.casper.storageapi.cache.Cache;
 import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
-import wtf.casper.storageapi.misc.ISQLFStorage;
 import wtf.casper.storageapi.misc.ISQLKVStorage;
 import wtf.casper.storageapi.utils.Constants;
 
@@ -35,11 +35,11 @@ public abstract class MariaDBKVStorage<K, V> implements ConstructableValue<K, V>
             .build());
 
     public MariaDBKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
-        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
     public MariaDBKVStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
-        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
 

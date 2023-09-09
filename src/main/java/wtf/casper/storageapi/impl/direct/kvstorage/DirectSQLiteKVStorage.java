@@ -1,6 +1,5 @@
 package wtf.casper.storageapi.impl.direct.kvstorage;
 
-import wtf.casper.storageapi.impl.fstorage.SQLiteFStorage;
 import wtf.casper.storageapi.impl.kvstorage.SQLiteKVStorage;
 import wtf.casper.storageapi.misc.ConstructableValue;
 

@@ -1,7 +1,6 @@
 package wtf.casper.storageapi.impl.direct.kvstorage;
 
 import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.impl.fstorage.MariaDBFStorage;
 import wtf.casper.storageapi.impl.kvstorage.MariaDBKVStorage;
 import wtf.casper.storageapi.misc.ConstructableValue;
 

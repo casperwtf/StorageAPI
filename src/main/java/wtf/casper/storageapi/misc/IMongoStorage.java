@@ -3,7 +3,6 @@ package wtf.casper.storageapi.misc;
 import com.mongodb.client.model.Filters;
 import org.bson.conversions.Bson;
 import wtf.casper.storageapi.FilterType;
-import wtf.casper.storageapi.StatelessFieldStorage;
 
 import java.util.*;
 

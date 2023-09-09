@@ -81,11 +81,7 @@ public final class IdUtils {
 
         final Method method = IdUtils.getIdMethod(type);
 
-        if (method != null) {
-            return method.getDeclaringClass();
-        }
-
-        throw new IdNotFoundException(type);
+        return method.getDeclaringClass();
 
     }
 
