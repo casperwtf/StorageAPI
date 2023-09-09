@@ -160,7 +160,6 @@ public interface StatelessFieldStorage<K, V> {
             try {
                 if (getClass().getGenericSuperclass() instanceof ParameterizedType parameterizedType) {
                     Type type = parameterizedType.getActualTypeArguments()[1];
-                    System.out.println(type.getTypeName());
                     Class<V> aClass = (Class<V>) Class.forName(type.getTypeName());
                     return ReflectionUtil.createInstance(aClass, key);
                 }
