@@ -145,27 +145,11 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
         });
     }
 
-    default CompletableFuture<List<V>> getField(String fieldPath) {
-        return CompletableFuture.supplyAsync(() -> {
-            List<V> values = new ArrayList<>();
-            query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + fieldPath + "') IS NOT NULL;", statement -> {
-            }, resultSet -> {
-                try {
-                    while (resultSet.next()) {
-                        String json = resultSet.getString("json");
-                        V value = Constants.getGson().fromJson(json, value());
-                        values.add(value);
-                    }
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            });
-            return values;
-        });
-    }
+    // All these are based off of https://mariadb.com/resources/blog/using-json-in-mariadb/
+    // and https://learn.microsoft.com/en-us/sql/relational-databases/json/json-data-sql-server?view=sql-server-ver16
 
     default void _equals(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') = ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') = ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
@@ -181,7 +165,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void _contains(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') LIKE ?;", statement -> {
             setStatement(statement, 1, "%" + value + "%");
         }, resultSet -> {
             try {
@@ -197,7 +181,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void startsWith(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') LIKE ?;", statement -> {
             setStatement(statement, 1, value + "%");
         }, resultSet -> {
             try {
@@ -213,7 +197,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void endsWith(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') LIKE ?;", statement -> {
             setStatement(statement, 1, "%" + value);
         }, resultSet -> {
             try {
@@ -229,7 +213,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void greaterThan(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') > ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') > ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
@@ -245,7 +229,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void lessThan(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') < ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') < ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
@@ -261,7 +245,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void greaterThanOrEqualTo(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') >= ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') >= ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
@@ -277,7 +261,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void lessThanOrEqualTo(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') <= ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') <= ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
@@ -293,7 +277,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void notEquals(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') != ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') != ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
@@ -309,7 +293,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void notContains(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') NOT LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') NOT LIKE ?;", statement -> {
             setStatement(statement, 1, "%" + value + "%");
         }, resultSet -> {
             try {
@@ -325,7 +309,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void notStartsWIth(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') NOT LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') NOT LIKE ?;", statement -> {
             setStatement(statement, 1, value + "%");
         }, resultSet -> {
             try {
@@ -341,7 +325,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void notEndsWith(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE json_extract(json, '$." + field + "') NOT LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') NOT LIKE ?;", statement -> {
             setStatement(statement, 1, "%" + value);
         }, resultSet -> {
             try {
