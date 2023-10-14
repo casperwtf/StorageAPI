@@ -30,10 +30,10 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
 
     protected final Class<K> keyClass;
     protected final Class<V> valueClass;
-    private final String idFieldName;
     private final MongoClient mongoClient;
     @Getter
     private final MongoCollection<Document> collection;
+    private final ReplaceOptions replaceOptions = new ReplaceOptions().upsert(true);
 
     private Cache<K, V> cache = new CaffeineCache<>(Caffeine.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build());
 
@@ -44,19 +44,11 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
     public MongoKVStorage(final String uri, final String database, final String collection, final Class<K> keyClass, final Class<V> valueClass) {
         this.valueClass = valueClass;
         this.keyClass = keyClass;
-        this.idFieldName = IdUtils.getIdName(this.valueClass);
         try {
-            log.fine("Connecting to MongoDB...");
             mongoClient = MongoProvider.getClient(uri);
         } catch (Exception e) {
-            log.warning(" ");
-            log.warning(" ");
-            log.warning("Failed to connect to MongoDB. Please check your credentials.");
-            log.warning(" ");
-            log.warning(" ");
-            log.warning("Developer Stack Trace: ");
-            log.warning(" ");
-            throw e;
+            e.printStackTrace();
+            throw new RuntimeException("Failed to connect to mongo");
         }
 
         MongoDatabase mongoDatabase = mongoClient.getDatabase(database);
@@ -97,7 +89,7 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
                 return cache.getIfPresent(key);
             }
 
-            Document filter = new Document(idFieldName, convertUUIDtoString(key));
+            Document filter = new Document("_id", convertUUIDtoString(key));
             Document document = getCollection().find(filter).first();
 
             if (document == null) {
@@ -116,9 +108,9 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
             K key = (K) IdUtils.getId(valueClass, value);
             cache.asMap().putIfAbsent(key, value);
             getCollection().replaceOne(
-                    new Document(idFieldName, convertUUIDtoString(key)),
+                    new Document("_id", convertUUIDtoString(key)),
                     Document.parse(Constants.getGson().toJson(value)),
-                    new ReplaceOptions().upsert(true)
+                    replaceOptions
             );
         });
     }
@@ -129,7 +121,7 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
             try {
                 K id = (K) IdUtils.getId(valueClass, key);
                 cache.invalidate(id);
-                getCollection().deleteMany(getDocument(FilterType.EQUALS, idFieldName, convertUUIDtoString(id)));
+                getCollection().deleteMany(getDocument(FilterType.EQUALS, "_id", convertUUIDtoString(id)));
             } catch (Exception e) {
                 e.printStackTrace();
             }
