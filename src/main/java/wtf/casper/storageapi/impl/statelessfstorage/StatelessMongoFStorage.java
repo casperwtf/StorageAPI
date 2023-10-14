@@ -32,6 +32,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     private final MongoClient mongoClient;
     @Getter
     private final MongoCollection<Document> collection;
+    private final ReplaceOptions replaceOptions = new ReplaceOptions().upsert(true);
 
     public StatelessMongoFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
         this(credentials.getUri(), credentials.getDatabase(), credentials.getCollection(), keyClass, valueClass);
@@ -42,15 +43,10 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
         this.keyClass = keyClass;
         this.idFieldName = IdUtils.getIdName(this.valueClass);
         try {
-            log.fine("Connecting to MongoDB...");
             mongoClient = MongoProvider.getClient(uri);
         } catch (Exception e) {
-            log.warning("\n\n");
-            log.warning("Failed to connect to MongoDB. Please check your credentials.");
-            log.warning("\n\n");
-            log.warning("Developer Stack Trace: ");
-            log.warning(" ");
-            throw e;
+            e.printStackTrace();
+            throw new RuntimeException("Failed to connect to mongo");
         }
 
         MongoDatabase mongoDatabase = mongoClient.getDatabase(database);
@@ -116,9 +112,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
                 return null;
             }
 
-            V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
-            K key = (K) IdUtils.getId(valueClass, obj);
-            return obj;
+            return Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
         });
     }
 
@@ -126,10 +120,12 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     public CompletableFuture<Void> save(V value) {
         return CompletableFuture.runAsync(() -> {
             K key = (K) IdUtils.getId(valueClass, value);
+            Document document = Document.parse(Constants.getGson().toJson(value));
+            document.put("_id", convertUUIDtoString(key));
             getCollection().replaceOne(
                     new Document(idFieldName, convertUUIDtoString(key)),
-                    Document.parse(Constants.getGson().toJson(value)),
-                    new ReplaceOptions().upsert(true)
+                    document,
+                    replaceOptions
             );
         });
     }
