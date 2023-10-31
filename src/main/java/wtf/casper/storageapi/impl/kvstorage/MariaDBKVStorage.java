@@ -96,7 +96,7 @@ public abstract class MariaDBKVStorage<K, V> implements ConstructableValue<K, V>
     @Override
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
-            execute("DELETE FROM " + this.table);
+            execute("DELETE FROM " + this.table + ";");
         });
     }
 
@@ -144,7 +144,7 @@ public abstract class MariaDBKVStorage<K, V> implements ConstructableValue<K, V>
             }, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(Constants.getGson().fromJson(resultSet.getString("json"), this.valueClass));
+                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();

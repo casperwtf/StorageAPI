@@ -116,6 +116,19 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
     }
 
     @Override
+    public CompletableFuture<Void> saveAll(Collection<V> values) {
+        return CompletableFuture.runAsync(() -> {
+            List<Document> documents = new ArrayList<>();
+            for (V value : values) {
+                K key = (K) IdUtils.getId(valueClass, value);
+                cache.asMap().putIfAbsent(key, value);
+                documents.add(Document.parse(Constants.getGson().toJson(value)));
+            }
+            getCollection().insertMany(documents);
+        });
+    }
+
+    @Override
     public CompletableFuture<Void> remove(V key) {
         return CompletableFuture.runAsync(() -> {
             try {

@@ -76,7 +76,7 @@ public class StatelessSQLKVStorage<K, V> implements ISQLKVStorage<K, V> {
     @Override
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
-            execute("DELETE FROM " + this.table);
+            execute("DELETE FROM " + this.table + ";");
         });
     }
 
@@ -99,7 +99,7 @@ public class StatelessSQLKVStorage<K, V> implements ISQLKVStorage<K, V> {
             }, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(Constants.getGson().fromJson(resultSet.getString("json"), this.valueClass));
+                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();

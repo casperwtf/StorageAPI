@@ -93,7 +93,7 @@ public abstract class SQLKVStorage<K, V> implements ConstructableValue<K, V>, KV
     @Override
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
-            execute("DELETE FROM " + this.table);
+            execute("DELETE FROM " + this.table + ";");
         });
     }
 
@@ -141,7 +141,7 @@ public abstract class SQLKVStorage<K, V> implements ConstructableValue<K, V>, KV
             }, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(Constants.getGson().fromJson(resultSet.getString("json"), this.valueClass));
+                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();

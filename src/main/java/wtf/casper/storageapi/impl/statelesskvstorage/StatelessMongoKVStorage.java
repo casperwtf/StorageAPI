@@ -95,6 +95,20 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
     }
 
     @Override
+    public CompletableFuture<Void> saveAll(Collection<V> values) {
+        return CompletableFuture.runAsync(() -> {
+            for (V value : values) {
+                K key = (K) IdUtils.getId(valueClass, value);
+                getCollection().replaceOne(
+                        new Document("_id", convertUUIDtoString(key)),
+                        Document.parse(Constants.getGson().toJson(value)),
+                        replaceOptions
+                );
+            }
+        });
+    }
+
+    @Override
     public CompletableFuture<Void> remove(V key) {
         return CompletableFuture.runAsync(() -> {
             try {

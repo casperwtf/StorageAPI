@@ -31,7 +31,6 @@ public interface IMongoStorage {
         return object;
     }
 
-
     default Bson getDocument(FilterType filterType, String field, Object value) {
         value = convertUUIDtoString(value);
         Bson filter;

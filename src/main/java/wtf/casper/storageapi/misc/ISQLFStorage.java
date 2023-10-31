@@ -2,17 +2,13 @@ package wtf.casper.storageapi.misc;
 
 import com.zaxxer.hikari.HikariDataSource;
 import wtf.casper.storageapi.StatelessFieldStorage;
-import wtf.casper.storageapi.id.Transient;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.utils.Constants;
 import wtf.casper.storageapi.utils.UnsafeConsumer;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -25,6 +21,17 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     String table();
 
     Logger logger();
+
+    @Override
+    default CompletableFuture<Void> saveAll(final Collection<V> values) {
+        // TODO: generate a bulk insert https://stackoverflow.com/questions/452859/inserting-multiple-rows-in-a-single-sql-query
+
+        return CompletableFuture.runAsync(() -> {
+            for (final V value : values) {
+                this.save(value);
+            }
+        });
+    }
 
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<PreparedStatement> statement, final UnsafeConsumer<ResultSet> result) {
         return CompletableFuture.supplyAsync(() -> {
@@ -111,51 +118,44 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
         }
     }
 
-    default List<Field> getFields(Class<?> clazz) {
-        return Arrays.stream(clazz.getDeclaredFields())
-                .filter(field -> !field.isAnnotationPresent(Transient.class))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .filter(field -> !Modifier.isStatic(field.getModifiers()))
-                .toList();
-    }
-
     default void createTable() {
         String idName = IdUtils.getIdName(value());
         boolean isUUID = UUID.class.isAssignableFrom(IdUtils.getIdClass(value()));
         String idType = isUUID ? "VARCHAR(36) NOT NULL" : "VARCHAR(255) NOT NULL";
         idType = idName + " " + idType + " PRIMARY KEY";
 
-        execute("CREATE TABLE IF NOT EXISTS " + table() + " (" + idType + ", json JSON NOT NULL);");
+        execute("CREATE TABLE IF NOT EXISTS " + table() + " (" + idType + ", data JSON NOT NULL);");
     }
 
     default CompletableFuture<Void> save(V value) {
         return CompletableFuture.runAsync(() -> {
-            Object id = IdUtils.getId(value());
+            Object id = IdUtils.getId(value(), value);
             if (id == null) {
-                logger().warning("Could not find id field for " + value().getSimpleName());
+                logger().warning("Could not find id field for " + value().getName());
                 return;
             }
 
             String idName = IdUtils.getIdName(value());
-            String json = Constants.getGson().toJson(value);
-            executeUpdate("INSERT INTO " + table() + " (" + idName + ", json) VALUES (?, ?) ON DUPLICATE KEY UPDATE json = ?;", statement -> {
+            String data = Constants.getGson().toJson(value);
+            executeUpdate("INSERT INTO " + table() + " (" + idName + ", data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = ?;", statement -> {
                 statement.setString(1, id.toString());
-                statement.setString(2, json);
+                statement.setString(2, data);
+                statement.setString(3, data);
             });
         });
     }
 
-    // All these are based off of https://mariadb.com/resources/blog/using-json-in-mariadb/
-    // and https://learn.microsoft.com/en-us/sql/relational-databases/json/json-data-sql-server?view=sql-server-ver16
+    // All these are based off of https://mariadb.com/resources/blog/using-data-in-mariadb/
+    // and https://learn.microsoft.com/en-us/sql/relational-databases/data/data-data-sql-server?view=sql-server-ver16
 
     default void _equals(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') = ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') = ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -165,13 +165,13 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void _contains(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') LIKE ?;", statement -> {
             setStatement(statement, 1, "%" + value + "%");
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -181,13 +181,13 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void startsWith(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') LIKE ?;", statement -> {
             setStatement(statement, 1, value + "%");
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -197,13 +197,13 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void endsWith(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') LIKE ?;", statement -> {
             setStatement(statement, 1, "%" + value);
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -213,13 +213,13 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void greaterThan(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') > ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') > ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -229,13 +229,13 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void lessThan(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') < ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') < ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -245,13 +245,13 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void greaterThanOrEqualTo(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') >= ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') >= ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -261,13 +261,13 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void lessThanOrEqualTo(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') <= ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') <= ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -277,13 +277,13 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void notEquals(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') != ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') != ?;", statement -> {
             setStatement(statement, 1, value);
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -293,13 +293,13 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void notContains(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') NOT LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') NOT LIKE ?;", statement -> {
             setStatement(statement, 1, "%" + value + "%");
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -308,14 +308,14 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
         });
     }
 
-    default void notStartsWIth(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') NOT LIKE ?;", statement -> {
+    default void notStartsWith(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') NOT LIKE ?;", statement -> {
             setStatement(statement, 1, value + "%");
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {
@@ -325,13 +325,13 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
     }
 
     default void notEndsWith(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(json, '$." + field + "') NOT LIKE ?;", statement -> {
+        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') NOT LIKE ?;", statement -> {
             setStatement(statement, 1, "%" + value);
         }, resultSet -> {
             try {
                 while (resultSet.next()) {
-                    String json = resultSet.getString("json");
-                    V v = Constants.getGson().fromJson(json, value());
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
                     values.add(v);
                 }
             } catch (SQLException e) {

@@ -10,6 +10,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,6 +23,17 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
     String table();
 
     Logger logger();
+
+    @Override
+    default CompletableFuture<Void> saveAll(final Collection<V> values) {
+        // TODO: generate a bulk insert https://stackoverflow.com/questions/452859/inserting-multiple-rows-in-a-single-sql-query
+
+        return CompletableFuture.runAsync(() -> {
+            for (final V value : values) {
+                this.save(value);
+            }
+        });
+    }
 
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<PreparedStatement> statement, final UnsafeConsumer<ResultSet> result) {
         return CompletableFuture.supplyAsync(() -> {
@@ -160,7 +172,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
             }, resultSet -> {
                 try {
                     if (resultSet.next()) {
-                        value.set(Constants.getGson().fromJson(resultSet.getString("json"), value()));
+                        value.set(Constants.getGson().fromJson(resultSet.getString("data"), value()));
                     }
                 } catch (SQLException e) {
                     e.printStackTrace();

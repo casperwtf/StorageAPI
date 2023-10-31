@@ -18,6 +18,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -101,7 +102,7 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
     @Override
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
-            execute("DELETE FROM " + this.table);
+            execute("DELETE FROM " + this.table + ";");
         });
     }
 
@@ -141,7 +142,7 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
             }, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(Constants.getGson().fromJson(resultSet.getString("json"), this.valueClass));
+                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();
@@ -150,5 +151,15 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
 
             return values;
         });
+    }
+
+    @Override
+    public void createTable() {
+        String idName = IdUtils.getIdName(value());
+        boolean isUUID = UUID.class.isAssignableFrom(IdUtils.getIdClass(value()));
+        String idType = isUUID ? "VARCHAR(36) NOT NULL" : "VARCHAR(255) NOT NULL";
+        idType = idName + " " + idType + " PRIMARY KEY";
+
+        execute("CREATE TABLE IF NOT EXISTS " + table() + " (" + idType + ", json TEXT NOT NULL);");
     }
 }

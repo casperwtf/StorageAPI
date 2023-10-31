@@ -67,7 +67,6 @@ public class StorageTests {
         storage.deleteAll().join();
         storage.saveAll(initialData).join();
         storage.write().join();
-        storage.close().join();
     }
 
     private static Credentials credentials;
@@ -176,7 +175,7 @@ public class StorageTests {
     @Test
     public void testTotalData() {
         log.fine(" --- Testing total data...");
-        assertEquals(storage.allValues().join().size(), initialData.size());
+        assertEquals(initialData.size(), storage.allValues().join().size());
         log.fine(" --- Total data test passed!");
     }
 
@@ -187,7 +186,7 @@ public class StorageTests {
         Collection<TestObject> street = storage.get(
                 Filter.of("data.address", "1", FilterType.STARTS_WITH)
         ).join();
-        assertEquals(street.size(), 4);
+        assertEquals(4, street.size());
 
         log.fine(" --- Filter starts with test passed!");
     }
@@ -199,12 +198,12 @@ public class StorageTests {
         Collection<TestObject> street = storage.get(
                 Filter.of("name", "a", FilterType.ENDS_WITH)
         ).join();
-        assertEquals(street.size(), 5);
+        assertEquals(5, street.size());
 
         Collection<TestObject> phone = storage.get(
                 Filter.of("data.phone", "0", FilterType.ENDS_WITH)
         ).join();
-        assertEquals(phone.size(), 4);
+        assertEquals(4, phone.size());
 
         log.fine(" --- Filter starts with test passed!");
     }
@@ -216,7 +215,7 @@ public class StorageTests {
         Collection<TestObject> street = storage.get(
                 Filter.of("age", 20, FilterType.GREATER_THAN)
         ).join();
-        assertEquals(street.size(), 13);
+        assertEquals(13, street.size());
 
         log.fine(" --- Filter greater than test passed!");
     }
@@ -228,7 +227,7 @@ public class StorageTests {
         Collection<TestObject> street = storage.get(
                 Filter.of("age", 20, FilterType.LESS_THAN)
         ).join();
-        assertEquals(street.size(), 2);
+        assertEquals(2, street.size());
 
         log.fine(" --- Filter less than test passed!");
     }
@@ -241,18 +240,18 @@ public class StorageTests {
                 Filter.of("data.address", "Street", FilterType.CONTAINS),
                 Filter.of("age", 18, FilterType.EQUALS)
         ).join();
-        assertEquals(street.size(), 1);
+        assertEquals(1, street.size());
 
         Collection<TestObject> street1 = storage.get(
                 Filter.of("data.address", "Street", FilterType.CONTAINS)
         ).join();
-        assertEquals(street1.size(), 8);
+        assertEquals(8, street1.size());
 
         CompletableFuture<Collection<TestObject>> allStreets = storage.get(
                 Filter.of("data.address", "Street", FilterType.CONTAINS),
                 Filter.of("data.address", "Avenue", FilterType.CONTAINS, SortingType.NONE, Filter.Type.OR)
         );
-        assertEquals(allStreets.join().size(), 16);
+        assertEquals(16, allStreets.join().size());
         log.fine(" --- Filter contains test passed!");
     }
 
@@ -263,6 +262,6 @@ public class StorageTests {
         Collection<TestObject> usd = storage.get(
                 Filter.of("data.balance.currency", "USD", FilterType.EQUALS)
         ).join();
-        assertEquals(usd.size(), 16);
+        assertEquals(16, usd.size());
     }
 }

@@ -42,10 +42,6 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
 
     @SneakyThrows
     public SQLFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
-        if (true) {
-            throw new IllegalStateException(this.getClass().getSimpleName() + " is not implemented yet");
-        }
-
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;
@@ -99,7 +95,7 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
     @Override
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
-            execute("DELETE FROM " + this.table);
+            execute("DELETE FROM " + this.table + ";");
         });
     }
 
@@ -123,7 +119,7 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
                 case LESS_THAN_OR_EQUAL_TO -> this.lessThanOrEqualTo(field, value, values);
                 case NOT_EQUALS -> this.notEquals(field, value, values);
                 case NOT_CONTAINS -> this.notContains(field, value, values);
-                case NOT_STARTS_WITH -> this.notStartsWIth(field, value, values);
+                case NOT_STARTS_WITH -> this.notStartsWith(field, value, values);
                 case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
             }
 
@@ -194,7 +190,7 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
             }, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(Constants.getGson().fromJson(resultSet.getString("json"), this.valueClass));
+                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();

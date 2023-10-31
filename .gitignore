@@ -4,6 +4,7 @@ target/
 !**/src/test/**/target/
 
 data.json
+data.db
 dependency-reduced-pom.xml
 
 

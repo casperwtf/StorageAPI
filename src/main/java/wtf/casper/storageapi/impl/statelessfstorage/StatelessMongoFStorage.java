@@ -131,6 +131,18 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     }
 
     @Override
+    public CompletableFuture<Void> saveAll(Collection<V> values) {
+        return CompletableFuture.runAsync(() -> {
+            List<Document> documents = new ArrayList<>();
+            for (V value : values) {
+                K key = (K) IdUtils.getId(valueClass, value);
+                documents.add(Document.parse(Constants.getGson().toJson(value)).append("_id", convertUUIDtoString(key)));
+            }
+            getCollection().insertMany(documents);
+        });
+    }
+
+    @Override
     public CompletableFuture<Void> remove(V key) {
         return CompletableFuture.runAsync(() -> {
             try {

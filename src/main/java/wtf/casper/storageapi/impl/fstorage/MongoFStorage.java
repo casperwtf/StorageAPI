@@ -164,6 +164,23 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
     }
 
     @Override
+    public CompletableFuture<Void> saveAll(Collection<V> values) {
+        return CompletableFuture.runAsync(() -> {
+            for (V value : values) {
+                K key = (K) IdUtils.getId(valueClass, value);
+                cache.asMap().putIfAbsent(key, value);
+                Document document = Document.parse(Constants.getGson().toJson(value));
+                document.put("_id", convertUUIDtoString(key));
+                getCollection().replaceOne(
+                        new Document(idFieldName, convertUUIDtoString(key)),
+                        document,
+                        replaceOptions
+                );
+            }
+        });
+    }
+
+    @Override
     public CompletableFuture<Void> remove(V key) {
         return CompletableFuture.runAsync(() -> {
             try {
