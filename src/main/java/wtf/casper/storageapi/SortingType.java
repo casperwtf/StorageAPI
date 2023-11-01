@@ -62,8 +62,16 @@ public enum SortingType {
 
             if (useValue) {
                 values = values.stream().sorted((o1, o2) -> {
-                    Object o1Value = ((Map<?, ?>) ReflectionUtil.getFieldValue(o1, field).get()).values().iterator().next();
-                    Object o2Value = ((Map<?, ?>) ReflectionUtil.getFieldValue(o2, field).get()).values().iterator().next();
+                    Optional<Object> fieldValue1 = ReflectionUtil.getFieldValue(o1, field);
+                    if (fieldValue1.isEmpty()) {
+                        throw new IllegalArgumentException("Field " + field + " does not exist in " + o1.getClass().getSimpleName());
+                    }
+                    Object o1Value = ((Map<?, ?>) fieldValue1.get()).values().iterator().next();
+                    Optional<Object> fieldValue2 = ReflectionUtil.getFieldValue(o2, field);
+                    if (fieldValue2.isEmpty()) {
+                        throw new IllegalArgumentException("Field " + field + " does not exist in " + o2.getClass().getSimpleName());
+                    }
+                    Object o2Value = ((Map<?, ?>) fieldValue2.get()).values().iterator().next();
 
                     if (o1Value instanceof Comparable) {
                         return ((Comparable) o1Value).compareTo(o2Value);

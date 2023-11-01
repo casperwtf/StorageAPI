@@ -11,7 +11,8 @@ import wtf.casper.storageapi.cache.Cache;
 import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
-import wtf.casper.storageapi.misc.ISQLStorage;
+import wtf.casper.storageapi.misc.ISQLFStorage;
+import wtf.casper.storageapi.utils.Constants;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -19,12 +20,13 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 @Log
-public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldStorage<K, V> {
+public abstract class SQLiteFStorage<K, V> implements ISQLFStorage<K, V>, FieldStorage<K, V> {
 
     protected final Class<K> keyClass;
     protected final Class<V> valueClass;
@@ -46,8 +48,7 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
         this.ds.setConnectionTimeout(120000);
         this.ds.setLeakDetectionThreshold(300000);
         this.ds.setAutoCommit(true);
-        this.execute(createTableFromObject());
-        this.scanForMissingColumns();
+        createTable();
     }
 
     @SneakyThrows
@@ -62,12 +63,11 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
         this.ds.setConnectionTimeout(120000);
         this.ds.setLeakDetectionThreshold(300000);
         this.ds.setAutoCommit(true);
-        this.execute(createTableFromObject());
-        this.scanForMissingColumns();
+        createTable();
     }
 
     @Override
-    public HikariDataSource getDataSource() {
+    public HikariDataSource dataSource() {
         return ds;
     }
 
@@ -77,7 +77,7 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
     }
 
     @Override
-    public String getTable() {
+    public String table() {
         return table;
     }
 
@@ -104,7 +104,7 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
     @Override
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
-            execute("DELETE FROM " + this.table);
+            execute("DELETE FROM " + this.table + ";");
         });
     }
 
@@ -128,12 +128,12 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
                 case LESS_THAN_OR_EQUAL_TO -> this.lessThanOrEqualTo(field, value, values);
                 case NOT_EQUALS -> this.notEquals(field, value, values);
                 case NOT_CONTAINS -> this.notContains(field, value, values);
-                case NOT_STARTS_WITH -> this.notStartsWIth(field, value, values);
+                case NOT_STARTS_WITH -> this.notStartsWith(field, value, values);
                 case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
             }
 
             for (V v : values) {
-                cache.put((K) IdUtils.getId(valueClass, v), v);
+                cache.put((K) IdUtils.getId(value(), v), v);
             }
 
             return values;
@@ -156,25 +156,6 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
     }
 
     @Override
-    public CompletableFuture<Void> save(final V value) {
-        return CompletableFuture.runAsync(() -> {
-            if (this.ds.isClosed()) {
-                logger().warning("Could not save " + valueClass.getSimpleName() + " because the data source is closed.");
-                return;
-            }
-            Object id = IdUtils.getId(valueClass, value);
-            if (id == null) {
-                log.warning("Could not find id field for " + keyClass.getSimpleName());
-                return;
-            }
-
-            cache.put((K) id, value);
-
-            this.executeUpdate("INSERT INTO " + this.table + " VALUES (" + this.getValues(value, valueClass) + ") ON CONFLICT(" + IdUtils.getIdName(valueClass) + ") DO UPDATE SET " + this.getUpdateValues() + ";");
-        });
-    }
-
-    @Override
     public CompletableFuture<Void> remove(final V value) {
         return CompletableFuture.runAsync(() -> {
             Field idField;
@@ -183,9 +164,9 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
             } catch (IdNotFoundException e) {
                 throw new RuntimeException(e);
             }
-            this.cache.invalidate((K) IdUtils.getId(this.valueClass, value));
+            this.cache.invalidate((K) IdUtils.getId(value(), value));
             String field = idField.getName();
-            this.execute("DELETE FROM " + this.table + " WHERE " + field + " = '" + IdUtils.getId(this.valueClass, value) + "';");
+            this.execute("DELETE FROM " + this.table + " WHERE " + field + " = '" + IdUtils.getId(value(), value) + "';");
         });
     }
 
@@ -206,11 +187,11 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
     public CompletableFuture<Collection<V>> allValues() {
         return CompletableFuture.supplyAsync(() -> {
             final List<V> values = new ArrayList<>();
-            query("SELECT * FROM " + this.table, statement -> {
+            query("SELECT * FROM " + this.table + ";", statement -> {
             }, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(this.construct(resultSet));
+                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();
@@ -218,6 +199,240 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
             });
 
             return values;
+        });
+    }
+
+    @Override
+    public void createTable() {
+        String idName = IdUtils.getIdName(value());
+        boolean isUUID = IdUtils.getIdClass(value()).isAssignableFrom(UUID.class);
+        String idType = isUUID ? "VARCHAR(36) NOT NULL" : "VARCHAR(255) NOT NULL";
+        idType = idName + " " + idType + " PRIMARY KEY";
+
+        execute("CREATE TABLE IF NOT EXISTS " + table() + "(" + idType + ", data TEXT NOT NULL);");
+    }
+
+    @Override
+    public void _equals(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') = ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void _contains(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') LIKE ?;", statement -> {
+            setStatement(statement, 1, "%" + value + "%");
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void startsWith(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') LIKE ?;", statement -> {
+            setStatement(statement, 1, value + "%");
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void endsWith(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') LIKE ?;", statement -> {
+            setStatement(statement, 1, "%" + value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void greaterThan(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') > ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void greaterThanOrEqualTo(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') >= ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void lessThan(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') < ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void lessThanOrEqualTo(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') <= ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void notEquals(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') != ?;", statement -> {
+            setStatement(statement, 1, value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, value());
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void notContains(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') NOT LIKE ?;", statement -> {
+            setStatement(statement, 1, "%" + value + "%");
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, this.valueClass);
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void notEndsWith(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') NOT LIKE ?;", statement -> {
+            setStatement(statement, 1, "%" + value);
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, this.valueClass);
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void notStartsWith(String field, Object value, List<V> values) {
+        query("SELECT * FROM " + table() + " WHERE json_extract(data, '$." + field + "') NOT LIKE ?;", statement -> {
+            setStatement(statement, 1, value + "%");
+        }, resultSet -> {
+            try {
+                while (resultSet.next()) {
+                    String data = resultSet.getString("data");
+                    V v = Constants.getGson().fromJson(data, this.valueClass);
+                    values.add(v);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> save(V value) {
+        return CompletableFuture.runAsync(() -> {
+            Object id = IdUtils.getId(value(), value);
+            if (id == null) {
+                logger().warning("Could not find id field for " + value().getName());
+                return;
+            }
+
+            String idName = IdUtils.getIdName(value());
+            String json = Constants.getGson().toJson(value);
+            executeUpdate("INSERT INTO " + table() + " (" + idName + ", data) VALUES (?, ?) ON CONFLICT(" + idName + ") DO UPDATE SET " + idName + " = ?, data = ?;", statement -> {
+                statement.setString(1, id.toString());
+                statement.setString(2, json);
+                statement.setString(3, id.toString());
+                statement.setString(4, json);
+            });
         });
     }
 }

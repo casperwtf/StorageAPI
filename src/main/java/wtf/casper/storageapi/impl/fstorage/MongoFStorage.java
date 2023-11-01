@@ -36,6 +36,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
     private final MongoClient mongoClient;
     @Getter
     private final MongoCollection<Document> collection;
+    private final ReplaceOptions replaceOptions = new ReplaceOptions().upsert(true);
 
     private Cache<K, V> cache = new CaffeineCache<>(Caffeine.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build());
 
@@ -48,17 +49,10 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
         this.keyClass = keyClass;
         this.idFieldName = IdUtils.getIdName(this.valueClass);
         try {
-            log.fine("Connecting to MongoDB...");
             mongoClient = MongoProvider.getClient(uri);
         } catch (Exception e) {
-            log.warning(" ");
-            log.warning(" ");
-            log.warning("Failed to connect to MongoDB. Please check your credentials.");
-            log.warning(" ");
-            log.warning(" ");
-            log.warning("Developer Stack Trace: ");
-            log.warning(" ");
-            throw e;
+            e.printStackTrace();
+            throw new RuntimeException("Failed to connect to mongo");
         }
 
         MongoDatabase mongoDatabase = mongoClient.getDatabase(database);
@@ -116,7 +110,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
                 return cache.getIfPresent(key);
             }
 
-            Document filter = new Document(idFieldName, convertUUIDtoString(key));
+            Document filter = new Document("_id", convertUUIDtoString(key));
             Document document = getCollection().find(filter).first();
 
             if (document == null) {
@@ -159,11 +153,30 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
         return CompletableFuture.runAsync(() -> {
             K key = (K) IdUtils.getId(valueClass, value);
             cache.asMap().putIfAbsent(key, value);
+            Document document = Document.parse(Constants.getGson().toJson(value));
+            document.put("_id", convertUUIDtoString(key));
             getCollection().replaceOne(
                     new Document(idFieldName, convertUUIDtoString(key)),
-                    Document.parse(Constants.getGson().toJson(value)),
-                    new ReplaceOptions().upsert(true)
+                    document,
+                    replaceOptions
             );
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> saveAll(Collection<V> values) {
+        return CompletableFuture.runAsync(() -> {
+            for (V value : values) {
+                K key = (K) IdUtils.getId(valueClass, value);
+                cache.asMap().putIfAbsent(key, value);
+                Document document = Document.parse(Constants.getGson().toJson(value));
+                document.put("_id", convertUUIDtoString(key));
+                getCollection().replaceOne(
+                        new Document(idFieldName, convertUUIDtoString(key)),
+                        document,
+                        replaceOptions
+                );
+            }
         });
     }
 
@@ -173,7 +186,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             try {
                 K id = (K) IdUtils.getId(valueClass, key);
                 cache.invalidate(id);
-                getCollection().deleteMany(getDocument(FilterType.EQUALS, idFieldName, convertUUIDtoString(id)));
+                getCollection().deleteMany(getDocument(FilterType.EQUALS, "_id", convertUUIDtoString(id)));
             } catch (Exception e) {
                 e.printStackTrace();
             }
