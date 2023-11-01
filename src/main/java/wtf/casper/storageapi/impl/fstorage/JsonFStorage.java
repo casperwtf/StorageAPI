@@ -1,6 +1,5 @@
 package wtf.casper.storageapi.impl.fstorage;
 
-
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.SneakyThrows;
 import org.jetbrains.annotations.Nullable;
@@ -118,10 +117,7 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
             try {
-                boolean delete = this.file.delete();
-                if (!delete) {
-                    System.out.println("Failed to delete file " + this.file.getAbsolutePath());
-                }
+                this.file.delete();
                 this.file.createNewFile();
 
                 final Writer writer = new FileWriter(this.file);

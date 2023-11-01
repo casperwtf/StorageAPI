@@ -8,8 +8,7 @@ import wtf.casper.storageapi.FilterType;
 import wtf.casper.storageapi.SortingType;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
-import wtf.casper.storageapi.misc.ISQLFStorage;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.misc.ISQLStorage;
 
 import java.lang.reflect.Field;
 import java.sql.SQLException;
@@ -20,22 +19,22 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
 @Log
-public class StatelessMariaDBFStorage<K, V> implements ISQLFStorage<K, V> {
+public class StatelessMariaDBStorage<K, V> implements ISQLStorage<K, V> {
     private final HikariDataSource ds;
     private final Class<K> keyClass;
     private final Class<V> valueClass;
     private final String table;
 
-    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
-        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+    public StatelessMariaDBStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
+        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
-    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
-        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+    public StatelessMariaDBStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
+        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
     @SneakyThrows
-    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
+    public StatelessMariaDBStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;
@@ -46,11 +45,12 @@ public class StatelessMariaDBFStorage<K, V> implements ISQLFStorage<K, V> {
         this.ds.addDataSourceProperty("user", username);
         this.ds.addDataSourceProperty("password", password);
         this.ds.setAutoCommit(true);
-        createTable();
+        this.execute(createTableFromObject());
+        this.scanForMissingColumns();
     }
 
     @Override
-    public HikariDataSource dataSource() {
+    public HikariDataSource getDataSource() {
         return ds;
     }
 
@@ -60,7 +60,7 @@ public class StatelessMariaDBFStorage<K, V> implements ISQLFStorage<K, V> {
     }
 
     @Override
-    public String table() {
+    public String getTable() {
         return table;
     }
 
@@ -77,7 +77,7 @@ public class StatelessMariaDBFStorage<K, V> implements ISQLFStorage<K, V> {
     @Override
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
-            execute("DELETE FROM " + this.table + ";");
+            execute("DELETE FROM " + this.table);
         });
     }
 
@@ -101,7 +101,7 @@ public class StatelessMariaDBFStorage<K, V> implements ISQLFStorage<K, V> {
                 case LESS_THAN_OR_EQUAL_TO -> this.lessThanOrEqualTo(field, value, values);
                 case NOT_EQUALS -> this.notEquals(field, value, values);
                 case NOT_CONTAINS -> this.notContains(field, value, values);
-                case NOT_STARTS_WITH -> this.notStartsWith(field, value, values);
+                case NOT_STARTS_WITH -> this.notStartsWIth(field, value, values);
                 case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
             }
 
@@ -119,6 +119,24 @@ public class StatelessMariaDBFStorage<K, V> implements ISQLFStorage<K, V> {
         return CompletableFuture.supplyAsync(() ->
                 this.get(field, value, filterType, SortingType.NONE).join().stream().findFirst().orElse(null)
         );
+    }
+
+    @Override
+    public CompletableFuture<Void> save(final V value) {
+        return CompletableFuture.runAsync(() -> {
+            if (this.ds.isClosed()) {
+                return;
+            }
+
+            Object id = IdUtils.getId(valueClass, value);
+            if (id == null) {
+                log.warning("Could not find id field for " + keyClass.getSimpleName());
+                return;
+            }
+
+            String values = this.getValues(value, valueClass);
+            this.executeUpdate("INSERT INTO " + this.table + " (" + this.getColumns() + ") VALUES (" + values + ") ON DUPLICATE KEY UPDATE " + getUpdateValues());
+        });
     }
 
     @Override
@@ -163,7 +181,7 @@ public class StatelessMariaDBFStorage<K, V> implements ISQLFStorage<K, V> {
             }, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
+                        values.add(this.construct(resultSet));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();

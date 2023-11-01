@@ -2,9 +2,8 @@ package wtf.casper.storageapi.cache;
 
 import lombok.extern.java.Log;
 
-import java.util.Collections;
 import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Log
 public class MapCache<K, V> implements Cache<K, V> {
@@ -15,8 +14,8 @@ public class MapCache<K, V> implements Cache<K, V> {
         if (object instanceof Map) {
             this.map = (Map<K, V>) object;
         } else {
-            log.warning("Cache must be a java.util.Map, creating a new synchronized WeakHashMap");
-            this.map = Collections.synchronizedMap(new WeakHashMap<>());
+            log.warning("Cache must be a java.util.Map, creating a new ConcurrentHashMap");
+            this.map = new ConcurrentHashMap<>();
         }
     }
 

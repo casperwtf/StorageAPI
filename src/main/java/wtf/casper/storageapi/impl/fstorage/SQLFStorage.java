@@ -13,8 +13,7 @@ import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
-import wtf.casper.storageapi.misc.ISQLFStorage;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.misc.ISQLStorage;
 
 import java.lang.reflect.Field;
 import java.sql.SQLException;
@@ -26,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 @Log
-public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, FieldStorage<K, V>, ISQLFStorage<K, V> {
+public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, FieldStorage<K, V>, ISQLStorage<K, V> {
 
     protected final Class<K> keyClass;
     protected final Class<V> valueClass;
@@ -37,7 +36,7 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
             .build());
 
     public SQLFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
-        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
     @SneakyThrows
@@ -54,11 +53,12 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
         this.ds.setConnectionTimeout(120000);
         this.ds.setLeakDetectionThreshold(300000);
         this.ds.setAutoCommit(true);
-        createTable();
+        this.executeUpdate(createTableFromObject());
+        this.scanForMissingColumns();
     }
 
     @Override
-    public HikariDataSource dataSource() {
+    public HikariDataSource getDataSource() {
         return ds;
     }
 
@@ -68,7 +68,7 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
     }
 
     @Override
-    public String table() {
+    public String getTable() {
         return table;
     }
 
@@ -95,7 +95,7 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
     @Override
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
-            execute("DELETE FROM " + this.table + ";");
+            execute("DELETE FROM " + this.table);
         });
     }
 
@@ -119,7 +119,7 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
                 case LESS_THAN_OR_EQUAL_TO -> this.lessThanOrEqualTo(field, value, values);
                 case NOT_EQUALS -> this.notEquals(field, value, values);
                 case NOT_CONTAINS -> this.notContains(field, value, values);
-                case NOT_STARTS_WITH -> this.notStartsWith(field, value, values);
+                case NOT_STARTS_WITH -> this.notStartsWIth(field, value, values);
                 case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
             }
 
@@ -144,6 +144,25 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
         return CompletableFuture.supplyAsync(() ->
                 this.get(field, value, filterType, SortingType.NONE).join().stream().findFirst().orElse(null)
         );
+    }
+
+    @Override
+    public CompletableFuture<Void> save(final V value) {
+        return CompletableFuture.runAsync(() -> {
+            if (this.ds.isClosed()) {
+                return;
+            }
+            Object id = IdUtils.getId(valueClass, value);
+            if (id == null) {
+                log.warning("Could not find id field for " + keyClass.getSimpleName());
+                return;
+            }
+
+            cache.put((K) id, value);
+
+            String values = this.getValues(value, valueClass);
+            this.executeUpdate("INSERT INTO " + this.table + " (" + this.getColumns() + ") VALUES (" + values + ") ON DUPLICATE KEY UPDATE " + getUpdateValues());
+        });
     }
 
     @Override
@@ -190,7 +209,7 @@ public abstract class SQLFStorage<K, V> implements ConstructableValue<K, V>, Fie
             }, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
+                        values.add(this.construct(resultSet));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();
