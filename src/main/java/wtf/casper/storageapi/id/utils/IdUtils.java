@@ -143,4 +143,29 @@ public final class IdUtils {
     }
 
 
+    public static Class<?> getIdType(Class<?> clazz) {
+        final List<Field> fields = Arrays.stream(clazz.getDeclaredFields())
+                .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                .filter(field -> !Modifier.isTransient(field.getModifiers()))
+                .toList();
+
+        for (final Field field : fields) {
+            field.setAccessible(true);
+
+            if (!field.isAnnotationPresent(Id.class)) {
+                continue;
+            }
+
+            return field.getType();
+        }
+
+        try {
+            final Method method = IdUtils.getIdMethod(clazz);
+
+            return method.getReturnType();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 }

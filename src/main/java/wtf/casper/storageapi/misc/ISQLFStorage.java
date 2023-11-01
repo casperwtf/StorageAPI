@@ -1,16 +1,21 @@
 package wtf.casper.storageapi.misc;
 
 import com.zaxxer.hikari.HikariDataSource;
+import org.checkerframework.checker.units.qual.A;
 import wtf.casper.storageapi.StatelessFieldStorage;
+import wtf.casper.storageapi.id.StorageSerialized;
+import wtf.casper.storageapi.id.Transient;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.Lazy;
 import wtf.casper.storageapi.utils.UnsafeConsumer;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.sql.*;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
+import java.sql.Date;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
@@ -22,16 +27,9 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
 
     Logger logger();
 
-    @Override
-    default CompletableFuture<Void> saveAll(final Collection<V> values) {
-        // TODO: generate a bulk insert https://stackoverflow.com/questions/452859/inserting-multiple-rows-in-a-single-sql-query
+    Lazy<List<Field>> getDeclaredFields();
 
-        return CompletableFuture.runAsync(() -> {
-            for (final V value : values) {
-                this.save(value);
-            }
-        });
-    }
+    Lazy<Map<String, String>> getInsertIntoTables();
 
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<PreparedStatement> statement, final UnsafeConsumer<ResultSet> result) {
         return CompletableFuture.supplyAsync(() -> {
@@ -118,225 +116,258 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
         }
     }
 
-    default void createTable() {
-        String idName = IdUtils.getIdName(value());
-        boolean isUUID = UUID.class.isAssignableFrom(IdUtils.getIdClass(value()));
-        String idType = isUUID ? "VARCHAR(36) NOT NULL" : "VARCHAR(255) NOT NULL";
-        idType = idName + " " + idType + " PRIMARY KEY";
+    default List<Field> getSerializableFields(Class<?> clazz) {
+        return getDeclaredFields().get().stream()
+                .filter(field -> !field.isAnnotationPresent(Transient.class))
+                .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                .filter(field -> !Modifier.isTransient(field.getModifiers()))
+                .toList();
+    }
 
-        execute("CREATE TABLE IF NOT EXISTS " + table() + " (" + idType + ", data JSON NOT NULL);");
+    default void createRequiredTables() {
+        Map<String, Class<?>> map = requiredTables(value(), "", new HashMap<>());
+
+        map.forEach((string, aClass) -> execute(createTableFromClass(string, aClass)));
+    }
+
+    default Map<String, Class<?>> requiredTables(Class<?> clazz, String parent, Map<String, Class<?>> tables) {
+        if (parent == null || parent.isEmpty()) {
+            parent = table();
+        }
+
+        tables.put(parent, clazz);
+
+        for (Field field : getSerializableFields(clazz)) {
+            if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
+                tables.putAll(requiredTables(field.getType(), parent + "." + field.getName(), tables));
+            }
+        }
+
+        return tables;
+    }
+
+    default String createTableFromClass(String tableName, Class<?> clazz) {
+        StringBuilder builder = new StringBuilder();
+
+        boolean idIsUUID = IdUtils.getIdType(clazz) == UUID.class;
+
+        builder.append("CREATE TABLE IF NOT EXISTS ");
+        builder.append(tableName);
+        builder.append(" (");
+        if (idIsUUID) {
+            builder.append("_id VARCHAR(36) PRIMARY KEY, ");
+        } else {
+            builder.append("_id VARCHAR(255) PRIMARY KEY, ");
+        }
+
+        List<Field> fields = getSerializableFields(clazz);
+        for (int i = 0; i < fields.size(); i++) {
+            Field field = fields.get(i);
+            if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
+                continue;
+            }
+            builder.append(field.getName());
+            builder.append(" ");
+            builder.append(getSQLType(field.getType()));
+            if (i != fields.size() - 1) {
+                builder.append(", ");
+            }
+        }
+
+        builder.append(");");
+
+        return builder.toString();
+    }
+
+    default Map<String, String> insertIntoTables() {
+        Map<String, String> map = new HashMap<>();
+        insertIntoTables(value(), "", map);
+        return map;
+    }
+
+    // generate insert into statements to cache
+    default void insertIntoTables(Class<?> clazz, String parent, Map<String, String> map) {
+        if (parent == null || parent.isEmpty()) {
+            parent = table();
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("INSERT INTO ");
+        builder.append(parent);
+        builder.append(" (_id, ");
+
+        List<Field> fields = getSerializableFields(clazz);
+        for (int i = 0; i < fields.size(); i++) {
+            Field field = fields.get(i);
+            if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
+                continue;
+            }
+            builder.append(field.getName());
+            if (i != fields.size() - 1) {
+                builder.append(", ");
+            }
+        }
+
+        builder.append(") VALUES (?, ");
+
+        for (int i = 0; i < fields.size(); i++) {
+            if (fields.get(i).getType().isAnnotationPresent(StorageSerialized.class)) {
+                continue;
+            }
+            builder.append("?");
+            if (i != fields.size() - 1) {
+                builder.append(", ");
+            }
+        }
+
+        builder.append(") ON DUPLICATE KEY UPDATE ");
+
+        for (int i = 0; i < fields.size(); i++) {
+            if (fields.get(i).getType().isAnnotationPresent(StorageSerialized.class)) {
+                continue;
+            }
+            builder.append(fields.get(i).getName());
+            builder.append(" = VALUES(");
+            builder.append(fields.get(i).getName());
+            builder.append(")");
+            if (i != fields.size() - 1) {
+                builder.append(", ");
+            }
+        }
+
+        builder.append(";");
+
+        map.put(parent, builder.toString());
+
+        for (Field field : getSerializableFields(clazz)) {
+            if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
+                insertIntoTables(field.getType(), parent + "." + field.getName(), map);
+            }
+        }
+    }
+
+    default String getSQLType(Class<?> type) {
+        switch (type.getName()) {
+            case "String" -> {
+                return "VARCHAR(255)";
+            }
+            case "Integer", "int" -> {
+                return "INT";
+            }
+            case "Long", "long" -> {
+                return "BIGINT";
+            }
+            case "Boolean", "boolean" -> {
+                return "BOOLEAN";
+            }
+            case "Double", "double" -> {
+                return "DOUBLE";
+            }
+            case "Float", "float" -> {
+                return "FLOAT";
+            }
+            case "Short", "short" -> {
+                return "SMALLINT";
+            }
+            case "Byte", "byte" -> {
+                return "TINYINT";
+            }
+            case "Character", "char" -> {
+                return "CHAR(1)";
+            }
+            case "UUID" -> {
+                return "VARCHAR(36)";
+            }
+            case "Timestamp" -> {
+                return "TIMESTAMP";
+            }
+            case "Date" -> {
+                return "DATE";
+            }
+            case "Time" -> {
+                return "TIME";
+            }
+            case "BigDecimal" -> {
+                return "DECIMAL";
+            }
+            case "Blob" -> {
+                return "BLOB";
+            }
+            case "Clob" -> {
+                return "CLOB";
+            }
+            case "Array" -> {
+                return "ARRAY";
+            }
+            case "Ref" -> {
+                return "REF";
+            }
+            case "NClob" -> {
+                return "NCLOB";
+            }
+            case "RowId" -> {
+                return "ROWID";
+            }
+            case "SQLXML" -> {
+                return "SQLXML";
+            }
+            default -> {
+                return "VARCHAR(255)";
+            }
+        }
     }
 
     default CompletableFuture<Void> save(V value) {
         return CompletableFuture.runAsync(() -> {
-            Object id = IdUtils.getId(value(), value);
-            if (id == null) {
-                logger().warning("Could not find id field for " + value().getName());
-                return;
+            Map<String, String> insertMap = getInsertIntoTables().get();
+
+            String insert = insertMap.get(table());
+            if (insert == null) {
+                throw new IllegalStateException("Could not find insert statement for table " + table());
             }
 
-            String idName = IdUtils.getIdName(value());
-            String data = Constants.getGson().toJson(value);
-            executeUpdate("INSERT INTO " + table() + " (" + idName + ", data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = ?;", statement -> {
-                statement.setString(1, id.toString());
-                statement.setString(2, data);
-                statement.setString(3, data);
+            Object id = IdUtils.getId(value.getClass(), value);
+
+            execute(insert, preparedStatement -> {
+                setStatement(preparedStatement, 1, id);
+                int i = 2;
+                for (Field field : getSerializableFields(value.getClass())) {
+                    if (field.getType().isAnnotationPresent(StorageSerialized.class)) {
+                        continue;
+                    }
+                    try {
+                        field.setAccessible(true);
+                        setStatement(preparedStatement, i, field.get(value));
+                        i++;
+                    } catch (IllegalAccessException e) {
+                        e.printStackTrace();
+                    }
+                }
             });
-        });
-    }
 
-    // All these are based off of https://mariadb.com/resources/blog/using-data-in-mariadb/
-    // and https://learn.microsoft.com/en-us/sql/relational-databases/data/data-data-sql-server?view=sql-server-ver16
 
-    default void _equals(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') = ?;", statement -> {
-            setStatement(statement, 1, value);
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
+            insertMap.forEach((parent, statement) -> {
+                if (parent.equals(table())) {
+                    return;
                 }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
 
-    default void _contains(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') LIKE ?;", statement -> {
-            setStatement(statement, 1, "%" + value + "%");
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    default void startsWith(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') LIKE ?;", statement -> {
-            setStatement(statement, 1, value + "%");
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    default void endsWith(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') LIKE ?;", statement -> {
-            setStatement(statement, 1, "%" + value);
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    default void greaterThan(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') > ?;", statement -> {
-            setStatement(statement, 1, value);
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    default void lessThan(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') < ?;", statement -> {
-            setStatement(statement, 1, value);
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    default void greaterThanOrEqualTo(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') >= ?;", statement -> {
-            setStatement(statement, 1, value);
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    default void lessThanOrEqualTo(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') <= ?;", statement -> {
-            setStatement(statement, 1, value);
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    default void notEquals(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') != ?;", statement -> {
-            setStatement(statement, 1, value);
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    default void notContains(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') NOT LIKE ?;", statement -> {
-            setStatement(statement, 1, "%" + value + "%");
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    default void notStartsWith(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') NOT LIKE ?;", statement -> {
-            setStatement(statement, 1, value + "%");
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    default void notEndsWith(String field, Object value, List<V> values) {
-        query("SELECT * FROM " + table() + " WHERE JSON_VALUE(data, '$." + field + "') NOT LIKE ?;", statement -> {
-            setStatement(statement, 1, "%" + value);
-        }, resultSet -> {
-            try {
-                while (resultSet.next()) {
-                    String data = resultSet.getString("data");
-                    V v = Constants.getGson().fromJson(data, value());
-                    values.add(v);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
+                execute(statement, preparedStatement -> {
+                    setStatement(preparedStatement, 1, id);
+                    int i = 2;
+                    for (Field field : getSerializableFields(value.getClass())) {
+                        if (!field.getType().isAnnotationPresent(StorageSerialized.class)) {
+                            continue;
+                        }
+                        try {
+                            field.setAccessible(true);
+                            setStatement(preparedStatement, i, field.get(value));
+                            i++;
+                        } catch (IllegalAccessException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+            });
         });
     }
 
