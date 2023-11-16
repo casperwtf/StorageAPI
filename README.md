@@ -2,6 +2,7 @@
 StorageAPI is an easy way to query and store data.
 
 # Useful Stuff We Use
+![yourkit logo](https://www.yourkit.com/images/yklogo.png)
 
 YourKit supports open source projects with innovative and intelligent tools
 for monitoring and profiling Java and .NET applications.
