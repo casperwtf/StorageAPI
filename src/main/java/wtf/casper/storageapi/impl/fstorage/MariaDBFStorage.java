@@ -46,6 +46,9 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
 
     @SneakyThrows
     public MariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
+        if (true) {
+            throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
+        }
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;

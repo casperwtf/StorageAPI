@@ -36,6 +36,10 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
 
     @SneakyThrows
     public SQLiteFStorage(final Class<K> keyClass, final Class<V> valueClass, final File file, String table) {
+        if (true) {
+            throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
+        }
+
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;
@@ -52,6 +56,10 @@ public abstract class SQLiteFStorage<K, V> implements ISQLStorage<K, V>, FieldSt
 
     @SneakyThrows
     public SQLiteFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String connection) {
+        if (true) {
+            throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
+        }
+
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;

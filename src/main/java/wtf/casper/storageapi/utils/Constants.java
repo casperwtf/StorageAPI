@@ -24,6 +24,7 @@ public class Constants {
     private final static JsonWriterSettings jsonWriterSettings = JsonWriterSettings.builder()
             .int64Converter((value, writer) -> writer.writeNumber(value.toString()))
             .build();
+
     @Getter
     private final static ExclusionStrategy exclusionStrategy = new ExclusionStrategy() {
         @Override
