@@ -67,7 +67,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             getCollection().deleteMany(new Document());
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -84,7 +84,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             }
 
             return sortingType.sort(collection, field);
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -99,7 +99,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
 
             V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
             return obj;
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -113,7 +113,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             }
 
             return Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -127,7 +127,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
                     document,
                     replaceOptions
             );
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -139,21 +139,21 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
     public CompletableFuture<Void> write() {
         // No need to write to mongo
         return CompletableFuture.runAsync(() -> {
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
     public CompletableFuture<Void> close() {
         // No need to close mongo because it's handled by a provider
         return CompletableFuture.runAsync(() -> {
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override

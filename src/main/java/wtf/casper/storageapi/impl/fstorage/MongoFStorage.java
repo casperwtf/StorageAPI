@@ -83,7 +83,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             getCollection().deleteMany(new Document());
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -100,7 +100,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             }
 
             return sortingType.sort(collection, field);
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -120,7 +120,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
             cache.asMap().putIfAbsent(key, obj);
             return obj;
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -145,7 +145,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             K key = (K) IdUtils.getId(valueClass, obj);
             cache.asMap().putIfAbsent(key, obj);
             return obj;
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -160,7 +160,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
                     document,
                     replaceOptions
             );
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -173,21 +173,21 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
     public CompletableFuture<Void> write() {
         // No need to write to mongo
         return CompletableFuture.runAsync(() -> {
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
     public CompletableFuture<Void> close() {
         // No need to close mongo because it's handled by a provider
         return CompletableFuture.runAsync(() -> {
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -202,6 +202,6 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             }
 
             return collection;
-        });
+        }, Constants.EXECUTOR);
     }
 }

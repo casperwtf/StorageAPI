@@ -4,6 +4,7 @@ import dev.dejvokep.boostedyaml.YamlDocument;
 import dev.dejvokep.boostedyaml.block.implementation.Section;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.KeyValue;
+import wtf.casper.storageapi.utils.Constants;
 import wtf.casper.storageapi.utils.ReflectionUtil;
 
 import java.io.IOException;
@@ -48,7 +49,7 @@ public interface StatelessFieldStorage<K, V> {
 
             values.removeIf(v -> Collections.frequency(values, v) > 1);
             return values;
-        });
+        }, Constants.EXECUTOR);
     }
 
     default Collection<V> filterGroup(List<Filter> filters) {
@@ -116,7 +117,7 @@ public interface StatelessFieldStorage<K, V> {
             }
 
             return join.stream().limit(limit).toList();
-        });
+        }, Constants.EXECUTOR);
     }
 
     /**
@@ -226,7 +227,7 @@ public interface StatelessFieldStorage<K, V> {
      */
     default CompletableFuture<Void> close() {
         return CompletableFuture.runAsync(() -> {
-        });
+        }, Constants.EXECUTOR);
     }
 
     /**
@@ -235,7 +236,7 @@ public interface StatelessFieldStorage<K, V> {
      * @return a future that will complete with a boolean that represents whether the storage contains a value that matches the given field and value.
      */
     default CompletableFuture<Boolean> contains(final String field, final Object value) {
-        return CompletableFuture.supplyAsync(() -> getFirst(field, value).join() != null);
+        return CompletableFuture.supplyAsync(() -> getFirst(field, value).join() != null, Constants.EXECUTOR);
     }
 
     /**
@@ -246,7 +247,7 @@ public interface StatelessFieldStorage<K, V> {
         return CompletableFuture.supplyAsync(() -> {
             storage.allValues().thenAccept((values) -> values.forEach(v -> save(v).join())).join();
             return true;
-        });
+        }, Constants.EXECUTOR);
     }
 
     /**
@@ -275,7 +276,7 @@ public interface StatelessFieldStorage<K, V> {
             } catch (Exception e) {
                 return false;
             }
-        });
+        }, Constants.EXECUTOR);
     }
 
     /**
@@ -297,6 +298,6 @@ public interface StatelessFieldStorage<K, V> {
 
             // Sort the values.
             return sortingType.sort(values, field);
-        });
+        }, Constants.EXECUTOR);
     }
 }

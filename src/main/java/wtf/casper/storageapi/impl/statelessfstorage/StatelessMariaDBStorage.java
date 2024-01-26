@@ -9,6 +9,7 @@ import wtf.casper.storageapi.SortingType;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ISQLStorage;
+import wtf.casper.storageapi.utils.Constants;
 
 import java.lang.reflect.Field;
 import java.sql.SQLException;
@@ -48,8 +49,6 @@ public class StatelessMariaDBStorage<K, V> implements ISQLStorage<K, V> {
         this.ds.addDataSourceProperty("user", username);
         this.ds.addDataSourceProperty("password", password);
         this.ds.setAutoCommit(true);
-        this.execute(createTableFromObject());
-        this.scanForMissingColumns();
     }
 
     @Override
@@ -81,88 +80,38 @@ public class StatelessMariaDBStorage<K, V> implements ISQLStorage<K, V> {
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             execute("DELETE FROM " + this.table);
-        });
+        }, Constants.EXECUTOR);
     }
 
     @SneakyThrows
     public CompletableFuture<Collection<V>> get(final String field, Object value, FilterType filterType, SortingType sortingType) {
-        return CompletableFuture.supplyAsync(() -> {
-            final List<V> values = new ArrayList<>();
-            if (!filterType.isApplicable(value.getClass())) {
-                log.warning("Filter type " + filterType.name() + " is not applicable to " + value.getClass().getSimpleName());
-                return values;
-            }
-
-            switch (filterType) {
-                case EQUALS -> this._equals(field, value, values);
-                case CONTAINS -> this._contains(field, value, values);
-                case STARTS_WITH -> this.startsWith(field, value, values);
-                case ENDS_WITH -> this.endsWith(field, value, values);
-                case GREATER_THAN -> this.greaterThan(field, value, values);
-                case LESS_THAN -> this.lessThan(field, value, values);
-                case GREATER_THAN_OR_EQUAL_TO -> this.greaterThanOrEqualTo(field, value, values);
-                case LESS_THAN_OR_EQUAL_TO -> this.lessThanOrEqualTo(field, value, values);
-                case NOT_EQUALS -> this.notEquals(field, value, values);
-                case NOT_CONTAINS -> this.notContains(field, value, values);
-                case NOT_STARTS_WITH -> this.notStartsWIth(field, value, values);
-                case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
-            }
-
-            return values;
-        });
+        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
     }
 
     @Override
     public CompletableFuture<V> get(K key) {
-        return getFirst(IdUtils.getIdName(this.valueClass), key);
+        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
     }
 
     @Override
     public CompletableFuture<V> getFirst(String field, Object value, FilterType filterType) {
-        return CompletableFuture.supplyAsync(() ->
-                this.get(field, value, filterType, SortingType.NONE).join().stream().findFirst().orElse(null)
-        );
+        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
     }
 
     @Override
     public CompletableFuture<Void> save(final V value) {
-        return CompletableFuture.runAsync(() -> {
-            if (this.ds.isClosed()) {
-                return;
-            }
-
-            Object id = IdUtils.getId(valueClass, value);
-            if (id == null) {
-                log.warning("Could not find id field for " + keyClass.getSimpleName());
-                return;
-            }
-
-            String values = this.getValues(value, valueClass);
-            this.executeUpdate("INSERT INTO " + this.table + " (" + this.getColumns() + ") VALUES (" + values + ") ON DUPLICATE KEY UPDATE " + getUpdateValues());
-        });
+        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
     }
 
     @Override
     public CompletableFuture<Void> remove(final V value) {
-        return CompletableFuture.runAsync(() -> {
-            Field idField;
-            try {
-                idField = IdUtils.getIdField(valueClass);
-            } catch (IdNotFoundException e) {
-                throw new RuntimeException(e);
-            }
-            String field = idField.getName();
-            this.execute("DELETE FROM " + this.table + " WHERE `" + field + "` = ?;", statement -> {
-                statement.setString(1, IdUtils.getId(this.valueClass, value).toString());
-            });
-        });
+        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
     }
 
     @Override
     @SneakyThrows
     public CompletableFuture<Void> write() {
-        return CompletableFuture.runAsync(() -> {
-        });
+        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
     }
 
     @Override
@@ -173,25 +122,11 @@ public class StatelessMariaDBStorage<K, V> implements ISQLStorage<K, V> {
             } catch (final SQLException e) {
                 e.printStackTrace();
             }
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
     public CompletableFuture<Collection<V>> allValues() {
-        return CompletableFuture.supplyAsync(() -> {
-            final List<V> values = new ArrayList<>();
-            query("SELECT * FROM " + this.table, statement -> {
-            }, resultSet -> {
-                try {
-                    while (resultSet.next()) {
-                        values.add(this.construct(resultSet));
-                    }
-                } catch (final SQLException e) {
-                    e.printStackTrace();
-                }
-            });
-
-            return values;
-        });
+        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
     }
 }
