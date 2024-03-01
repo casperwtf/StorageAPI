@@ -6,19 +6,25 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.extern.java.Log;
 import org.bson.json.JsonWriterSettings;
 import org.objenesis.ObjenesisStd;
 import wtf.casper.storageapi.id.Transient;
 
-@Log
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class Constants {
     public static final ObjenesisStd OBJENESIS_STD = new ObjenesisStd(true);
     public final static boolean DEBUG = false;
+    private final static AtomicInteger ID = new AtomicInteger(0);
+    public final static Executor EXECUTOR = Executors.newFixedThreadPool(Math.max(1, Runtime.getRuntime().availableProcessors() / 4), r -> {
+        return new Thread(r, "StorageAPI-Thread-" + ID.incrementAndGet());
+    });
 
     public static void debug(String message) {
         if (DEBUG) {
-            log.fine(message);
+            System.out.println(message);
         }
     }
 

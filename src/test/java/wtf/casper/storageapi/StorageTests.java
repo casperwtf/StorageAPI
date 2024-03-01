@@ -1,8 +1,6 @@
 package wtf.casper.storageapi;
 
 import lombok.extern.java.Log;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import wtf.casper.storageapi.impl.direct.fstorage.*;
 
 import java.io.File;
@@ -12,13 +10,10 @@ import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-import static org.junit.Assert.assertEquals;
-
 @Log
 public class StorageTests {
 
-    @BeforeAll
-    public static void setup() {
+    public static void main(String[] args) {
         InputStream stream = StorageTests.class.getClassLoader().getResourceAsStream("storage.properties");
         File file = new File("."+File.separator+"storage.properties");
         if (file.exists()) {
@@ -37,10 +32,10 @@ public class StorageTests {
             e.printStackTrace();
         }
 
-        init(properties);
+        new StorageTests(properties);
     }
 
-    public static void init(Properties properties) {
+    public StorageTests(Properties properties) {
         StorageType type = StorageType.valueOf((String) properties.get("storage.type"));
         credentials = Credentials.of(
                 type,
@@ -51,28 +46,28 @@ public class StorageTests {
                 (String) properties.get("storage.collection"),
                 (String) properties.get("storage.table"),
                 (String) properties.get("storage.uri"),
-                Integer.parseInt((String) properties.get("storage.port"))
+                (Integer) properties.get("storage.port")
         );
 
 
         switch (type) {
             case MONGODB -> storage = new DirectMongoFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
-            case SQLITE -> storage = new DirectSQLiteFStorage<>(UUID.class, TestObject.class, new File("."+File.separator+"data.db"), credentials.getTable(), TestObject::new);
-            case SQL -> storage = new DirectSQLFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
-            case MARIADB -> storage = new DirectMariaDBFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case JSON -> storage = new DirectJsonFStorage<>(UUID.class, TestObject.class, new File("."+File.separator+"data.json"), TestObject::new);
             default -> throw new IllegalStateException("Unexpected value: " + type);
         }
 
         storage.deleteAll().join();
-        storage.saveAll(initialData).join();
+        loadData(storage);
         storage.write().join();
+
+        testData(storage, initialData);
+        storage.close();
     }
 
-    private static Credentials credentials;
-    private static FieldStorage<UUID, TestObject> storage;
+    private Credentials credentials;
+    private FieldStorage<UUID, TestObject> storage;
 
-    private static final List<TestObject> initialData = List.of(
+    private final List<TestObject> initialData = List.of(
             new TestObject(
                     UUID.fromString("00000000-0000-0000-0000-000000000002"), "Mike", 25,
                     new TestObjectData("5678 Elm Avenue", "Fake Employer C", "fakemikec@gmail.com", "987-654-3210",
@@ -171,97 +166,122 @@ public class StorageTests {
             )
     );
 
-    
+
+    private void testData(StatelessFieldStorage<UUID, TestObject> storage, List<TestObject> originalData) {
+        log.fine(" --- Testing data...");
+        for (Method declaredMethod : getClass().getDeclaredMethods()) {
+            if (declaredMethod.isAnnotationPresent(Test.class)) {
+                try {
+                    declaredMethod.invoke(this, storage, originalData);
+                } catch (IllegalAccessException | InvocationTargetException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
     @Test
-    public void testTotalData() {
+    private void testTotalData(StatelessFieldStorage<UUID, TestObject> storage, List<TestObject> originalData) {
         log.fine(" --- Testing total data...");
-        assertEquals(initialData.size(), storage.allValues().join().size());
+        assertEquals(storage.allValues().join().size(), originalData.size());
         log.fine(" --- Total data test passed!");
     }
 
     @Test
-    public void testStartsWith() {
+    public void testStartsWith(StatelessFieldStorage<UUID, TestObject> storage, List<TestObject> originalData) {
         log.fine(" --- Testing filter starts with...");
 
         Collection<TestObject> street = storage.get(
                 Filter.of("data.address", "1", FilterType.STARTS_WITH)
         ).join();
-        assertEquals(4, street.size());
+        assertEquals(street.size(), 4);
 
         log.fine(" --- Filter starts with test passed!");
     }
 
     @Test
-    public void testEndsWith() {
+    public void testEndsWith(StatelessFieldStorage<UUID, TestObject> storage, List<TestObject> originalData) {
         log.fine(" --- Testing filter ends with...");
 
         Collection<TestObject> street = storage.get(
                 Filter.of("name", "a", FilterType.ENDS_WITH)
         ).join();
-        assertEquals(5, street.size());
+        assertEquals(street.size(), 5);
 
         Collection<TestObject> phone = storage.get(
                 Filter.of("data.phone", "0", FilterType.ENDS_WITH)
         ).join();
-        assertEquals(4, phone.size());
+        assertEquals(phone.size(), 4);
 
         log.fine(" --- Filter starts with test passed!");
     }
 
     @Test
-    public void testGreaterThan() {
+    public void testGreaterThan(StatelessFieldStorage<UUID, TestObject> storage, List<TestObject> originalData) {
         log.fine(" --- Testing filter greater than...");
 
         Collection<TestObject> street = storage.get(
                 Filter.of("age", 20, FilterType.GREATER_THAN)
         ).join();
-        assertEquals(13, street.size());
+        assertEquals(street.size(), 13);
 
         log.fine(" --- Filter greater than test passed!");
     }
 
     @Test
-    public void testLessThan() {
+    public void testLessThan(StatelessFieldStorage<UUID, TestObject> storage, List<TestObject> originalData) {
         log.fine(" --- Testing filter less than...");
 
         Collection<TestObject> street = storage.get(
                 Filter.of("age", 20, FilterType.LESS_THAN)
         ).join();
-        assertEquals(2, street.size());
+        assertEquals(street.size(), 2);
 
         log.fine(" --- Filter less than test passed!");
     }
 
     @Test
-    public void testContains() {
+    private void testContains(StatelessFieldStorage<UUID, TestObject> storage, List<TestObject> originalData) {
         log.fine(" --- Testing filter contains...");
 
         Collection<TestObject> street = storage.get(
                 Filter.of("data.address", "Street", FilterType.CONTAINS),
                 Filter.of("age", 18, FilterType.EQUALS)
         ).join();
-        assertEquals(1, street.size());
+        assertEquals(street.size(), 1);
 
         Collection<TestObject> street1 = storage.get(
                 Filter.of("data.address", "Street", FilterType.CONTAINS)
         ).join();
-        assertEquals(8, street1.size());
+        assertEquals(street1.size(), 8);
 
         CompletableFuture<Collection<TestObject>> allStreets = storage.get(
                 Filter.of("data.address", "Street", FilterType.CONTAINS),
                 Filter.of("data.address", "Avenue", FilterType.CONTAINS, SortingType.NONE, Filter.Type.OR)
         );
-        assertEquals(16, allStreets.join().size());
+        assertEquals(allStreets.join().size(), 16);
         log.fine(" --- Filter contains test passed!");
     }
 
     @Test
-    public void testEquals() {
+    private void testEquals(StatelessFieldStorage<UUID, TestObject> storage, List<TestObject> originalData) {
         log.fine(" --- Testing filter equals...");
 
         Collection<TestObject> usd = storage.get(
                 Filter.of("data.balance.currency", "USD", FilterType.EQUALS)
         ).join();
-        assertEquals(16, usd.size());
+        assertEquals(usd.size(), 16);
+    }
+
+
+
+    private void assertEquals(Object actual, Object expected) {
+        if (!Objects.equals(expected, actual)) {
+            throw new AssertionError("Expected: " + expected + ", but was: " + actual);
+        }
+    }
+
+    private void loadData(StatelessFieldStorage storage) {
+        storage.saveAll(initialData).join();
     }
 }

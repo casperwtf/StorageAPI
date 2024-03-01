@@ -3,8 +3,10 @@ package wtf.casper.storageapi.impl.direct.statelessfstorage;
 import wtf.casper.storageapi.Credentials;
 import wtf.casper.storageapi.impl.statelessfstorage.StatelessSQLFStorage;
 import wtf.casper.storageapi.misc.ConstructableValue;
+import wtf.casper.storageapi.misc.KeyValue;
 
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class DirectStatelessSQLFStorage<K, V> extends StatelessSQLFStorage<K, V> implements ConstructableValue<K, V> {
 

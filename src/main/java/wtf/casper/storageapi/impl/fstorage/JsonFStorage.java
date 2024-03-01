@@ -1,6 +1,5 @@
 package wtf.casper.storageapi.impl.fstorage;
 
-
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.SneakyThrows;
 import org.jetbrains.annotations.Nullable;
@@ -23,6 +22,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+//TODO make read from file async instead of keeping it all in memory
 public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, ConstructableValue<K, V> {
 
     private final File file;
@@ -76,7 +76,7 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             this.cache.invalidateAll();
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
@@ -84,12 +84,12 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
         return CompletableFuture.supplyAsync(() -> {
             Collection<V> values = cache().asMap().values();
             return sortingType.sort(filter(values, field, value, filterType), field);
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
     public CompletableFuture<V> get(K key) {
-        return CompletableFuture.supplyAsync(() -> cache.getIfPresent(key));
+        return CompletableFuture.supplyAsync(() -> cache.getIfPresent(key), Constants.EXECUTOR);
     }
 
     @Override
@@ -97,31 +97,28 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
         return CompletableFuture.supplyAsync(() -> {
             Collection<V> values = cache().asMap().values();
             return filterFirst(values, field, value, filterType);
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
     public CompletableFuture<Void> save(V value) {
         return CompletableFuture.runAsync(() -> {
             cache.put((K) IdUtils.getId(valueClass, value), value);
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
     public CompletableFuture<Void> remove(V value) {
         return CompletableFuture.runAsync(() -> {
             cache.invalidate((K) IdUtils.getId(valueClass, value));
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
             try {
-                boolean delete = this.file.delete();
-                if (!delete) {
-                    System.out.println("Failed to delete file " + this.file.getAbsolutePath());
-                }
+                this.file.delete();
                 this.file.createNewFile();
 
                 final Writer writer = new FileWriter(this.file);
@@ -131,12 +128,12 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
             } catch (final Exception e) {
                 e.printStackTrace();
             }
-        });
+        }, Constants.EXECUTOR);
     }
 
     @Override
     public CompletableFuture<Collection<V>> allValues() {
-        return CompletableFuture.supplyAsync(() -> cache.asMap().values());
+        return CompletableFuture.supplyAsync(() -> cache.asMap().values(), Constants.EXECUTOR);
     }
 
     private Collection<V> filter(final Collection<V> values, final String field, final Object value, FilterType filterType) {

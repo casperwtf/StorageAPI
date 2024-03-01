@@ -1,43 +1,36 @@
 package wtf.casper.storageapi.misc;
 
 import com.zaxxer.hikari.HikariDataSource;
-import wtf.casper.storageapi.StatelessKVStorage;
+import lombok.SneakyThrows;
+import wtf.casper.storageapi.StatelessFieldStorage;
+import wtf.casper.storageapi.id.StorageSerialized;
+import wtf.casper.storageapi.id.Transient;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.ReflectionUtil;
 import wtf.casper.storageapi.utils.UnsafeConsumer;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.Collection;
-import java.util.UUID;
+import javax.annotation.Nullable;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.math.BigDecimal;
+import java.sql.*;
+import java.sql.Date;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
-public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, ConstructableValue<K, V> {
+public interface ISQLStorage<K, V> extends StatelessFieldStorage<K, V>, ConstructableValue<K, V> {
 
-    HikariDataSource dataSource();
+    HikariDataSource getDataSource();
 
-    String table();
+    String getTable();
 
     Logger logger();
 
-    @Override
-    default CompletableFuture<Void> saveAll(final Collection<V> values) {
-        // TODO: generate a bulk insert https://stackoverflow.com/questions/452859/inserting-multiple-rows-in-a-single-sql-query
-
-        return CompletableFuture.runAsync(() -> {
-            for (final V value : values) {
-                this.save(value);
-            }
-        });
-    }
-
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<PreparedStatement> statement, final UnsafeConsumer<ResultSet> result) {
         return CompletableFuture.supplyAsync(() -> {
-            try (final Connection connection = this.dataSource().getConnection()) {
+            try (final Connection connection = this.getDataSource().getConnection()) {
                 try (final PreparedStatement prepared = connection.prepareStatement(query)) {
                     statement.accept(prepared);
                     final ResultSet resultSet = prepared.executeQuery();
@@ -52,7 +45,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
                 e.printStackTrace();
             }
             return null;
-        });
+        }, Constants.EXECUTOR);
     }
 
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<ResultSet> result) {
@@ -66,7 +59,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
     }
 
     default void execute(final String statement, final UnsafeConsumer<PreparedStatement> consumer) {
-        try (final Connection connection = this.dataSource().getConnection()) {
+        try (final Connection connection = this.getDataSource().getConnection()) {
             try (final PreparedStatement prepared = connection.prepareStatement(statement)) {
                 consumer.accept(prepared);
                 prepared.execute();
@@ -86,7 +79,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
     }
 
     default void executeQuery(final String statement, final UnsafeConsumer<PreparedStatement> consumer) {
-        try (final Connection connection = this.dataSource().getConnection()) {
+        try (final Connection connection = this.getDataSource().getConnection()) {
             try (final PreparedStatement prepared = connection.prepareStatement(statement)) {
                 consumer.accept(prepared);
                 prepared.executeQuery();
@@ -106,7 +99,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
     }
 
     default void executeUpdate(final String statement, final UnsafeConsumer<PreparedStatement> consumer) {
-        try (final Connection connection = this.dataSource().getConnection()) {
+        try (final Connection connection = this.getDataSource().getConnection()) {
             try (final PreparedStatement prepared = connection.prepareStatement(statement)) {
                 consumer.accept(prepared);
                 prepared.executeUpdate();
@@ -118,70 +111,5 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
             logger().warning("Error while executing query: " + statement);
             e.printStackTrace();
         }
-    }
-
-    default void createTable() {
-        String idName = IdUtils.getIdName(value());
-        boolean isUUID = UUID.class.isAssignableFrom(IdUtils.getIdClass(value()));
-        String idType = isUUID ? "VARCHAR(36) NOT NULL" : "VARCHAR(255) NOT NULL";
-        idType = idName + " " + idType + " PRIMARY KEY";
-
-        execute("CREATE TABLE IF NOT EXISTS " + table() + " (" + idType + ", json LONGTEXT NOT NULL);");
-    }
-
-    default CompletableFuture<Void> save(V value) {
-        return CompletableFuture.runAsync(() -> {
-            Object id = IdUtils.getId(value());
-            if (id == null) {
-                logger().warning("Could not find id field for " + value().getSimpleName());
-                return;
-            }
-
-            String idName = IdUtils.getIdName(value());
-            String json = Constants.getGson().toJson(value);
-            executeUpdate("INSERT INTO " + table() + " (" + idName + ", json) VALUES (?, ?) ON DUPLICATE KEY UPDATE json = ?;", statement -> {
-                statement.setString(1, id.toString());
-                statement.setString(2, json);
-            });
-        });
-    }
-
-    default CompletableFuture<Void> remove(V value) {
-        return CompletableFuture.runAsync(() -> {
-            Object id = IdUtils.getId(value());
-            if (id == null) {
-                logger().warning("Could not find id field for " + value().getSimpleName());
-                return;
-            }
-
-            String idName = IdUtils.getIdName(value());
-            executeUpdate("DELETE FROM " + table() + " WHERE `" + idName + "` = ?;", statement -> {
-                statement.setString(1, id.toString());
-            });
-        });
-    }
-
-    default CompletableFuture<V> get(K key) {
-        return CompletableFuture.supplyAsync(() -> {
-            String idName = IdUtils.getIdName(value());
-
-            AtomicReference<V> value = new AtomicReference<>();
-
-            query("SELECT * FROM " + table() + " WHERE `" + idName + "` = ?;", statement -> {
-                statement.setString(1, key.toString());
-            }, resultSet -> {
-                try {
-                    if (resultSet.next()) {
-                        value.set(Constants.getGson().fromJson(resultSet.getString("data"), value()));
-                    }
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-
-                resultSet.close();
-            }).join();
-
-            return value.get();
-        });
     }
 }
