@@ -2,7 +2,6 @@ package wtf.casper.storageapi;
 
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
-import wtf.casper.storageapi.utils.Constants;
 import wtf.casper.storageapi.utils.ReflectionUtil;
 
 import java.util.*;
@@ -52,6 +51,7 @@ public enum FilterType {
         if (fieldName.contains(".")) {
             String[] split = fieldName.split("\\.");
             for (int i = 0; i < split.length; i++) {
+
                 Optional<Object> o = ReflectionUtil.getFieldValue(field, split[i]);
                 if (o.isEmpty()) {
                     return false;
@@ -124,6 +124,7 @@ public enum FilterType {
         }
 
         if (fieldName.getClass().isArray()) {
+            assert field instanceof Object[];
             for (Object o : (Object[]) field) {
                 if (check(o, value)) {
                     return true;

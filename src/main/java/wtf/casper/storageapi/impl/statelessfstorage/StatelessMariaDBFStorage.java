@@ -1,18 +1,13 @@
-package wtf.casper.storageapi.impl.fstorage;
+package wtf.casper.storageapi.impl.statelessfstorage;
 
-import com.github.benmanes.caffeine.cache.Caffeine;
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.FieldStorage;
 import wtf.casper.storageapi.FilterType;
 import wtf.casper.storageapi.SortingType;
-import wtf.casper.storageapi.cache.Cache;
-import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
-import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.ISQLFStorage;
 import wtf.casper.storageapi.utils.Constants;
 
@@ -22,31 +17,25 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 @Log
-public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>, FieldStorage<K, V>, ISQLFStorage<K, V> {
-
-    protected final Class<K> keyClass;
-    protected final Class<V> valueClass;
+public class StatelessMariaDBFStorage<K, V> implements ISQLFStorage<K, V> {
     private final HikariDataSource ds;
+    private final Class<K> keyClass;
+    private final Class<V> valueClass;
     private final String table;
-    private Cache<K, V> cache = new CaffeineCache<>(Caffeine.newBuilder()
-            .expireAfterWrite(10, TimeUnit.MINUTES)
-            .build());
 
-    public MariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
+    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
         this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
-    public MariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
+    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
         this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
-
     @SneakyThrows
-    public MariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
+    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;
@@ -86,18 +75,10 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
     }
 
     @Override
-    public Cache<K, V> cache() {
-        return this.cache;
-    }
-
-    @Override
-    public void cache(Cache<K, V> cache) {
-        this.cache = cache;
-    }
-
-    @Override
     public CompletableFuture<Void> deleteAll() {
-        return CompletableFuture.runAsync(() -> execute("DELETE FROM " + this.table + ";"));
+        return CompletableFuture.runAsync(() -> {
+            execute("DELETE FROM " + this.table + ";");
+        });
     }
 
     @SneakyThrows
@@ -124,19 +105,12 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
                 case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
             }
 
-            for (V v : values) {
-                cache.put((K) IdUtils.getId(valueClass, v), v);
-            }
-
             return values;
         });
     }
 
     @Override
     public CompletableFuture<V> get(K key) {
-        if (cache.getIfPresent(key) != null) {
-            return CompletableFuture.completedFuture(cache.getIfPresent(key));
-        }
         return getFirst(IdUtils.getIdName(this.valueClass), key);
     }
 
@@ -156,7 +130,6 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
             } catch (IdNotFoundException e) {
                 throw new RuntimeException(e);
             }
-            this.cache.invalidate((K) IdUtils.getId(this.valueClass, value));
             String field = idField.getName();
             this.execute("DELETE FROM " + this.table + " WHERE `" + field + "` = ?;", statement -> {
                 statement.setString(1, IdUtils.getId(this.valueClass, value).toString());
@@ -168,7 +141,6 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
     @SneakyThrows
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
-            this.saveAll(this.cache.asMap().values());
         });
     }
 
@@ -201,5 +173,4 @@ public abstract class MariaDBFStorage<K, V> implements ConstructableValue<K, V>,
             return values;
         });
     }
-
 }

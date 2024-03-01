@@ -1,6 +1,5 @@
 package wtf.casper.storageapi.misc;
 
-import org.objenesis.Objenesis;
 import wtf.casper.storageapi.utils.Constants;
 
 public interface ConstructableValue<K, V> extends KeyValue<K, V> {

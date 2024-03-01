@@ -83,7 +83,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             getCollection().deleteMany(new Document());
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
@@ -100,7 +100,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             }
 
             return sortingType.sort(collection, field);
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
@@ -120,7 +120,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
             cache.asMap().putIfAbsent(key, obj);
             return obj;
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
@@ -145,7 +145,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             K key = (K) IdUtils.getId(valueClass, obj);
             cache.asMap().putIfAbsent(key, obj);
             return obj;
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
@@ -160,7 +160,24 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
                     document,
                     replaceOptions
             );
-        }, Constants.EXECUTOR);
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> saveAll(Collection<V> values) {
+        return CompletableFuture.runAsync(() -> {
+            for (V value : values) {
+                K key = (K) IdUtils.getId(valueClass, value);
+                cache.asMap().putIfAbsent(key, value);
+                Document document = Document.parse(Constants.getGson().toJson(value));
+                document.put("_id", convertUUIDtoString(key));
+                getCollection().replaceOne(
+                        new Document(idFieldName, convertUUIDtoString(key)),
+                        document,
+                        replaceOptions
+                );
+            }
+        });
     }
 
     @Override
@@ -173,21 +190,21 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
     public CompletableFuture<Void> write() {
         // No need to write to mongo
         return CompletableFuture.runAsync(() -> {
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
     public CompletableFuture<Void> close() {
         // No need to close mongo because it's handled by a provider
         return CompletableFuture.runAsync(() -> {
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
@@ -202,6 +219,6 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             }
 
             return collection;
-        }, Constants.EXECUTOR);
+        });
     }
 }
