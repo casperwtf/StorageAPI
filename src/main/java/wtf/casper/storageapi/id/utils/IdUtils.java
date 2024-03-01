@@ -7,26 +7,21 @@ import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 public final class IdUtils {
 
-    @SneakyThrows
     public static Object getId(final Object instance) {
         return getId(instance.getClass(), instance);
     }
 
-    @SneakyThrows
     public static Object getId(final Class<?> clazz, final Object instance) {
 
-        final List<Field> fields = new ArrayList<>();
-        for (Field field1 : clazz.getDeclaredFields()) {
-            if (!Modifier.isStatic(field1.getModifiers())) {
-                fields.add(field1);
-            }
-        }
+        final List<Field> fields = Arrays.stream(clazz.getDeclaredFields())
+                .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                .filter(field -> !Modifier.isTransient(field.getModifiers()))
+                .toList();
 
         for (final Field field : fields) {
             field.setAccessible(true);
@@ -35,23 +30,29 @@ public final class IdUtils {
                 continue;
             }
 
-            return field.get(instance);
-        }
-
-        final Method method = IdUtils.getIdMethod(clazz);
-
-        return method.invoke(instance);
-    }
-
-    @SneakyThrows
-    public static String getIdName(final Class<?> type) {
-
-        final List<Field> fields = new ArrayList<>();
-        for (Field field1 : type.getDeclaredFields()) {
-            if (!Modifier.isStatic(field1.getModifiers())) {
-                fields.add(field1);
+            try {
+                return field.get(instance);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
+
+        try {
+            final Method method = IdUtils.getIdMethod(clazz);
+            return method.invoke(instance);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+
+    }
+
+    public static String getIdName(final Class<?> type) {
+
+        final List<Field> fields = Arrays.stream(type.getDeclaredFields())
+                .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                .filter(field -> !Modifier.isTransient(field.getModifiers()))
+                .toList();
 
         for (final Field field : fields) {
             field.setAccessible(true);
@@ -63,21 +64,23 @@ public final class IdUtils {
             return field.getName();
         }
 
-        final Method method = IdUtils.getIdMethod(type);
+        try {
+            final Method method = IdUtils.getIdMethod(type);
 
-        return method.getName();
+            return method.getName();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
 
     }
 
-    @SneakyThrows
     public static Class<?> getIdClass(final Class<?> type) {
 
-        final List<Field> fields = new ArrayList<>();
-        for (Field field1 : type.getDeclaredFields()) {
-            if (!Modifier.isStatic(field1.getModifiers())) {
-                fields.add(field1);
-            }
-        }
+        final List<Field> fields = Arrays.stream(type.getDeclaredFields())
+                .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                .filter(field -> !Modifier.isTransient(field.getModifiers()))
+                .toList();
 
         for (final Field field : fields) {
             field.setAccessible(true);
@@ -89,24 +92,22 @@ public final class IdUtils {
             return field.getDeclaringClass();
         }
 
-        final Method method = IdUtils.getIdMethod(type);
+        try {
+            final Method method = IdUtils.getIdMethod(type);
 
-        if (method != null) {
             return method.getDeclaringClass();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
         }
-
-        throw new IdNotFoundException(type);
-
     }
 
     private static Method getIdMethod(final Class<?> type) throws IdNotFoundException {
 
-        final List<Method> methods = new ArrayList<>();
-        for (Method method1 : type.getDeclaredMethods()) {
-            if (!Modifier.isStatic(method1.getModifiers())) {
-                methods.add(method1);
-            }
-        }
+        final List<Method> methods = Arrays.stream(type.getDeclaredMethods())
+                .filter(method -> !Modifier.isStatic(method.getModifiers()))
+                .filter(method -> !Modifier.isTransient(method.getModifiers()))
+                .toList();
 
         for (final Method method : methods) {
             method.setAccessible(true);
@@ -123,12 +124,10 @@ public final class IdUtils {
 
     public static Field getIdField(final Class<?> type) throws IdNotFoundException {
 
-        final List<Field> fields = new ArrayList<>();
-        for (Field field1 : type.getDeclaredFields()) {
-            if (!Modifier.isStatic(field1.getModifiers())) {
-                fields.add(field1);
-            }
-        }
+        final List<Field> fields = Arrays.stream(type.getDeclaredFields())
+                .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                .filter(field -> !Modifier.isTransient(field.getModifiers()))
+                .toList();
 
         for (final Field field : fields) {
             field.setAccessible(true);
@@ -144,4 +143,29 @@ public final class IdUtils {
     }
 
 
+    public static Class<?> getIdType(Class<?> clazz) {
+        final List<Field> fields = Arrays.stream(clazz.getDeclaredFields())
+                .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                .filter(field -> !Modifier.isTransient(field.getModifiers()))
+                .toList();
+
+        for (final Field field : fields) {
+            field.setAccessible(true);
+
+            if (!field.isAnnotationPresent(Id.class)) {
+                continue;
+            }
+
+            return field.getType();
+        }
+
+        try {
+            final Method method = IdUtils.getIdMethod(clazz);
+
+            return method.getReturnType();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 }

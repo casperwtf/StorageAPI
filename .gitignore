@@ -3,12 +3,19 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+data.json
+data.db
+dependency-reduced-pom.xml
+
+
 ### IntelliJ IDEA ###
 .idea/modules.xml
 .idea/jarRepositories.xml
 .idea/compiler.xml
 .idea/libraries/
 .idea
+.idea/
+.idea/**
 *.iws
 *.iml
 *.ipr

@@ -1,5 +1,6 @@
-package wtf.casper.storageapi.impl.statelessfstorage;
+package wtf.casper.storageapi.impl.kvstorage;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.mongodb.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
@@ -7,11 +8,11 @@ import com.mongodb.client.model.ReplaceOptions;
 import lombok.Getter;
 import lombok.extern.java.Log;
 import org.bson.Document;
-import org.bson.conversions.Bson;
 import wtf.casper.storageapi.Credentials;
 import wtf.casper.storageapi.FilterType;
-import wtf.casper.storageapi.SortingType;
-import wtf.casper.storageapi.StatelessFieldStorage;
+import wtf.casper.storageapi.KVStorage;
+import wtf.casper.storageapi.cache.Cache;
+import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.IMongoStorage;
@@ -22,26 +23,27 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 @Log
-public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>, ConstructableValue<K, V>, IMongoStorage {
+public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue<K, V>, IMongoStorage {
 
-    private final Class<K> keyClass;
-    private final Class<V> valueClass;
-    private final String idFieldName;
+    protected final Class<K> keyClass;
+    protected final Class<V> valueClass;
     private final MongoClient mongoClient;
     @Getter
     private final MongoCollection<Document> collection;
     private final ReplaceOptions replaceOptions = new ReplaceOptions().upsert(true);
 
-    public StatelessMongoFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
+    private Cache<K, V> cache = new CaffeineCache<>(Caffeine.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build());
+
+    public MongoKVStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
         this(credentials.getUri(), credentials.getDatabase(), credentials.getCollection(), keyClass, valueClass);
     }
 
-    public StatelessMongoFStorage(final String uri, final String database, final String collection, final Class<K> keyClass, final Class<V> valueClass) {
+    public MongoKVStorage(final String uri, final String database, final String collection, final Class<K> keyClass, final Class<V> valueClass) {
         this.valueClass = valueClass;
         this.keyClass = keyClass;
-        this.idFieldName = IdUtils.getIdName(this.valueClass);
         try {
             mongoClient = MongoProvider.getClient(uri);
         } catch (Exception e) {
@@ -54,13 +56,23 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     }
 
     @Override
-    public Class<K> key() {
-        return keyClass;
+    public Cache<K, V> cache() {
+        return cache;
+    }
+
+    @Override
+    public void cache(Cache<K, V> cache) {
+        this.cache = cache;
     }
 
     @Override
     public Class<V> value() {
         return valueClass;
+    }
+
+    @Override
+    public Class<K> key() {
+        return keyClass;
     }
 
     @Override
@@ -71,26 +83,13 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     }
 
     @Override
-    public CompletableFuture<Collection<V>> get(String field, Object value, FilterType filterType, SortingType sortingType) {
-        return CompletableFuture.supplyAsync(() -> {
-
-            Collection<V> collection = new ArrayList<>();
-            Bson filter = getDocument(filterType, field, value);
-            List<Document> into = getCollection().find(filter).into(new ArrayList<>());
-
-            for (Document document : into) {
-                V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
-                collection.add(obj);
-            }
-
-            return sortingType.sort(collection, field);
-        });
-    }
-
-    @Override
     public CompletableFuture<V> get(K key) {
         return CompletableFuture.supplyAsync(() -> {
-            Document filter = new Document(idFieldName, convertUUIDtoString(key));
+            if (cache.getIfPresent(key) != null) {
+                return cache.getIfPresent(key);
+            }
+
+            Document filter = new Document("_id", convertUUIDtoString(key));
             Document document = getCollection().find(filter).first();
 
             if (document == null) {
@@ -98,21 +97,8 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             }
 
             V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
+            cache.asMap().putIfAbsent(key, obj);
             return obj;
-        });
-    }
-
-    @Override
-    public CompletableFuture<V> getFirst(String field, Object value, FilterType filterType) {
-        return CompletableFuture.supplyAsync(() -> {
-            Bson filter = getDocument(filterType, field, value);
-            Document document = getCollection().find(filter).first();
-
-            if (document == null) {
-                return null;
-            }
-
-            return Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
         });
     }
 
@@ -120,11 +106,10 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     public CompletableFuture<Void> save(V value) {
         return CompletableFuture.runAsync(() -> {
             K key = (K) IdUtils.getId(valueClass, value);
-            Document document = Document.parse(Constants.getGson().toJson(value));
-            document.put("_id", convertUUIDtoString(key));
+            cache.asMap().putIfAbsent(key, value);
             getCollection().replaceOne(
-                    new Document(idFieldName, convertUUIDtoString(key)),
-                    document,
+                    new Document("_id", convertUUIDtoString(key)),
+                    Document.parse(Constants.getGson().toJson(value)),
                     replaceOptions
             );
         });
@@ -136,7 +121,8 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             List<Document> documents = new ArrayList<>();
             for (V value : values) {
                 K key = (K) IdUtils.getId(valueClass, value);
-                documents.add(Document.parse(Constants.getGson().toJson(value)).append("_id", convertUUIDtoString(key)));
+                cache.asMap().putIfAbsent(key, value);
+                documents.add(Document.parse(Constants.getGson().toJson(value)));
             }
             getCollection().insertMany(documents);
         });
@@ -147,7 +133,8 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
         return CompletableFuture.runAsync(() -> {
             try {
                 K id = (K) IdUtils.getId(valueClass, key);
-                getCollection().deleteMany(getDocument(FilterType.EQUALS, idFieldName, convertUUIDtoString(id)));
+                cache.invalidate(id);
+                getCollection().deleteMany(getDocument(FilterType.EQUALS, "_id", convertUUIDtoString(id)));
             } catch (Exception e) {
                 e.printStackTrace();
             }

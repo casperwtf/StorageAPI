@@ -6,10 +6,9 @@ import lombok.extern.java.Log;
 import wtf.casper.storageapi.Credentials;
 import wtf.casper.storageapi.FilterType;
 import wtf.casper.storageapi.SortingType;
-import wtf.casper.storageapi.cache.Cache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
-import wtf.casper.storageapi.misc.ISQLStorage;
+import wtf.casper.storageapi.misc.ISQLFStorage;
 import wtf.casper.storageapi.utils.Constants;
 
 import java.lang.reflect.Field;
@@ -21,7 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
 @Log
-public class StatelessSQLFStorage<K, V> implements ISQLStorage<K, V> {
+public class StatelessSQLFStorage<K, V> implements ISQLFStorage<K, V> {
 
     private final HikariDataSource ds;
     private final Class<K> keyClass;
@@ -29,14 +28,11 @@ public class StatelessSQLFStorage<K, V> implements ISQLStorage<K, V> {
     private final String table;
 
     public StatelessSQLFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
-        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+        this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
     @SneakyThrows
     public StatelessSQLFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
-        if (true) {
-            throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
-        }
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;
@@ -49,10 +45,11 @@ public class StatelessSQLFStorage<K, V> implements ISQLStorage<K, V> {
         this.ds.setConnectionTimeout(300000);
         this.ds.setConnectionTimeout(120000);
         this.ds.setLeakDetectionThreshold(300000);
+        createTable();
     }
 
     @Override
-    public HikariDataSource getDataSource() {
+    public HikariDataSource dataSource() {
         return ds;
     }
 
@@ -62,7 +59,7 @@ public class StatelessSQLFStorage<K, V> implements ISQLStorage<K, V> {
     }
 
     @Override
-    public String getTable() {
+    public String table() {
         return table;
     }
 
@@ -79,39 +76,71 @@ public class StatelessSQLFStorage<K, V> implements ISQLStorage<K, V> {
     @Override
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
-            execute("DELETE FROM " + this.table);
-        }, Constants.EXECUTOR);
+            execute("DELETE FROM " + this.table + ";");
+        });
     }
 
     @SneakyThrows
     public CompletableFuture<Collection<V>> get(final String field, Object value, FilterType filterType, SortingType sortingType) {
-        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
+        return CompletableFuture.supplyAsync(() -> {
+            final List<V> values = new ArrayList<>();
+            if (!filterType.isApplicable(value.getClass())) {
+                log.warning("Filter type " + filterType.name() + " is not applicable to " + value.getClass().getSimpleName());
+                return values;
+            }
+
+            switch (filterType) {
+                case EQUALS -> this._equals(field, value, values);
+                case CONTAINS -> this._contains(field, value, values);
+                case STARTS_WITH -> this.startsWith(field, value, values);
+                case ENDS_WITH -> this.endsWith(field, value, values);
+                case GREATER_THAN -> this.greaterThan(field, value, values);
+                case LESS_THAN -> this.lessThan(field, value, values);
+                case GREATER_THAN_OR_EQUAL_TO -> this.greaterThanOrEqualTo(field, value, values);
+                case LESS_THAN_OR_EQUAL_TO -> this.lessThanOrEqualTo(field, value, values);
+                case NOT_EQUALS -> this.notEquals(field, value, values);
+                case NOT_CONTAINS -> this.notContains(field, value, values);
+                case NOT_STARTS_WITH -> this.notStartsWith(field, value, values);
+                case NOT_ENDS_WITH -> this.notEndsWith(field, value, values);
+            }
+
+            return values;
+        });
     }
 
     @Override
     public CompletableFuture<V> get(K key) {
-        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
+        return getFirst(IdUtils.getIdName(this.valueClass), key);
     }
 
     @Override
     public CompletableFuture<V> getFirst(String field, Object value, FilterType filterType) {
-        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
-    }
-
-    @Override
-    public CompletableFuture<Void> save(final V value) {
-        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
+        return CompletableFuture.supplyAsync(() ->
+                this.get(field, value, filterType, SortingType.NONE).join().stream().findFirst().orElse(null)
+        );
     }
 
     @Override
     public CompletableFuture<Void> remove(final V value) {
-        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
+        return CompletableFuture.runAsync(() -> {
+            Field idField;
+            try {
+                idField = IdUtils.getIdField(valueClass);
+            } catch (IdNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+            String field = idField.getName();
+            this.execute("DELETE FROM " + this.table + " WHERE `" + field + "` = ?;", statement -> {
+                statement.setString(1, IdUtils.getId(this.valueClass, value).toString());
+            });
+        });
     }
 
     @Override
     @SneakyThrows
     public CompletableFuture<Void> write() {
-        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
+        return CompletableFuture.runAsync(() -> {
+        });
     }
 
     @Override
@@ -122,11 +151,25 @@ public class StatelessSQLFStorage<K, V> implements ISQLStorage<K, V> {
             } catch (final SQLException e) {
                 e.printStackTrace();
             }
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
     public CompletableFuture<Collection<V>> allValues() {
-        throw new RuntimeException(this.getClass().getSimpleName() + " is not implemented yet!");
+        return CompletableFuture.supplyAsync(() -> {
+            final List<V> values = new ArrayList<>();
+            query("SELECT * FROM " + this.table, statement -> {
+            }, resultSet -> {
+                try {
+                    while (resultSet.next()) {
+                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
+                    }
+                } catch (final SQLException e) {
+                    e.printStackTrace();
+                }
+            });
+
+            return values;
+        });
     }
 }
