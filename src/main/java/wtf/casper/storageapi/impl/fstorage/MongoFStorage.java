@@ -83,7 +83,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             getCollection().deleteMany(new Document());
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -160,7 +160,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
                     document,
                     replaceOptions
             );
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -177,7 +177,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
                         replaceOptions
                 );
             }
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -190,21 +190,19 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Void> write() {
         // No need to write to mongo
-        return CompletableFuture.runAsync(() -> {
-        });
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletableFuture<Void> close() {
         // No need to close mongo because it's handled by a provider
-        return CompletableFuture.runAsync(() -> {
-        });
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override

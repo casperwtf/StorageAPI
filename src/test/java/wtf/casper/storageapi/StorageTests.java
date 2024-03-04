@@ -13,6 +13,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 @Log
 public class StorageTests {
@@ -57,9 +58,9 @@ public class StorageTests {
 
         switch (type) {
             case MONGODB -> storage = new DirectMongoFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
-            case SQLITE -> storage = new DirectSQLiteFStorage<>(UUID.class, TestObject.class, new File("."+File.separator+"data.db"), credentials.getTable(), TestObject::new);
-            case SQL -> storage = new DirectSQLFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
-            case MARIADB -> storage = new DirectMariaDBFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
+            case SQLITE -> throw new UnsupportedOperationException("SQLite is not supported yet!");
+            case SQL -> throw new UnsupportedOperationException("SQL is not supported yet!");
+            case MARIADB -> throw new UnsupportedOperationException("MariaDB is not supported yet!");
             case JSON -> storage = new DirectJsonFStorage<>(UUID.class, TestObject.class, new File("."+File.separator+"data.json"), TestObject::new);
             default -> throw new IllegalStateException("Unexpected value: " + type);
         }

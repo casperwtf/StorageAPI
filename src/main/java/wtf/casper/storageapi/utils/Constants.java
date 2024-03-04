@@ -11,16 +11,21 @@ import org.bson.json.JsonWriterSettings;
 import org.objenesis.ObjenesisStd;
 import wtf.casper.storageapi.id.Transient;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+
 @Log
 public class Constants {
     public static final ObjenesisStd OBJENESIS_STD = new ObjenesisStd(true);
-    public final static boolean DEBUG = false;
 
-    public static void debug(String message) {
-        if (DEBUG) {
-            log.fine(message);
-        }
-    }
+    private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(0);
+    public static final Executor DB_THREAD_POOL = Executors.newCachedThreadPool(r -> {
+        Thread thread = new Thread(r);
+        thread.setDaemon(true);
+        thread.setName("StorageAPI-DB-Thread-" + thread.getId() + "-" + THREAD_COUNTER.incrementAndGet());
+        return thread;
+    });
 
     @Getter
     private final static JsonWriterSettings jsonWriterSettings = JsonWriterSettings.builder()
@@ -39,6 +44,7 @@ public class Constants {
             return clazz.isAnnotationPresent(Transient.class);
         }
     };
+
     @Getter
     @Setter
     private static Gson gson;

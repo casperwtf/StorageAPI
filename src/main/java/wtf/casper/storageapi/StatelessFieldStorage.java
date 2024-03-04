@@ -224,8 +224,7 @@ public interface StatelessFieldStorage<K, V> {
      * Closes the storage/storage connection.
      */
     default CompletableFuture<Void> close() {
-        return CompletableFuture.runAsync(() -> {
-        });
+        return CompletableFuture.completedFuture(null);
     }
 
     /**

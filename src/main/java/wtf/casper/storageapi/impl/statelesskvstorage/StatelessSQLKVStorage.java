@@ -77,7 +77,7 @@ public class StatelessSQLKVStorage<K, V> implements ISQLKVStorage<K, V> {
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             execute("DELETE FROM " + this.table + ";");
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -88,7 +88,7 @@ public class StatelessSQLKVStorage<K, V> implements ISQLKVStorage<K, V> {
             } catch (final SQLException e) {
                 e.printStackTrace();
             }
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override

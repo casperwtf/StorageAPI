@@ -97,7 +97,9 @@ public abstract class MariaDBKVStorage<K, V> implements ConstructableValue<K, V>
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             execute("DELETE FROM " + this.table + ";");
-        });
+            this.cache.invalidateAll();
+            createTable();
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -114,7 +116,7 @@ public abstract class MariaDBKVStorage<K, V> implements ConstructableValue<K, V>
             this.execute("DELETE FROM " + this.table + " WHERE `" + field + "` = ?;", statement -> {
                 statement.setString(1, IdUtils.getId(this.valueClass, value).toString());
             });
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -122,7 +124,7 @@ public abstract class MariaDBKVStorage<K, V> implements ConstructableValue<K, V>
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
             this.saveAll(this.cache.asMap().values());
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -133,7 +135,7 @@ public abstract class MariaDBKVStorage<K, V> implements ConstructableValue<K, V>
             } catch (final SQLException e) {
                 e.printStackTrace();
             }
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -152,7 +154,7 @@ public abstract class MariaDBKVStorage<K, V> implements ConstructableValue<K, V>
             });
 
             return values;
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
 }

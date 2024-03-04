@@ -103,7 +103,7 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             execute("DELETE FROM " + this.table + ";");
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -118,7 +118,7 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
             this.cache.invalidate((K) IdUtils.getId(this.valueClass, value));
             String field = idField.getName();
             this.execute("DELETE FROM " + this.table + " WHERE " + field + " = '" + IdUtils.getId(this.valueClass, value) + "';");
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -126,12 +126,12 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
             this.saveAll(this.cache.asMap().values());
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Void> close() {
-        return CompletableFuture.runAsync(this.ds::close);
+        return CompletableFuture.runAsync(this.ds::close, Constants.DB_THREAD_POOL);
     }
 
     @Override

@@ -28,6 +28,7 @@ public enum SortingType {
         return false;
     }
 
+    // this needs to be turned into in-query sorting instead of in-memory sorting
     public <V> Collection<V> sort(Collection<V> values, String field) {
         if (values.isEmpty() || this == NONE) {
             return values;

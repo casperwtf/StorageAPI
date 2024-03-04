@@ -1,5 +1,7 @@
 package wtf.casper.storageapi.utils;
 
+import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.Table;
 import lombok.SneakyThrows;
 import org.jetbrains.annotations.Nullable;
 
@@ -12,17 +14,53 @@ import java.util.Optional;
 
 public class ReflectionUtil {
 
+    private final static Table<Class<?>, String, Field> fieldCache = HashBasedTable.create();
+
     @SneakyThrows
     public static void setPrivateField(Object object, String field, Object newValue) {
+        if (object == null) {
+            throw new IllegalArgumentException("Object cannot be null");
+        }
+
+        if (field == null) {
+            throw new IllegalArgumentException("Field cannot be null");
+        }
+
+        if (fieldCache.contains(object.getClass(), field)) {
+            Field objectField = fieldCache.get(object.getClass(), field);
+            objectField.set(object, newValue);
+            return;
+        }
+
         Class<?> clazz = object.getClass();
         Field objectField = clazz.getDeclaredField(field);
+
+        fieldCache.put(clazz, field, objectField);
+
         objectField.setAccessible(true);
         objectField.set(object, newValue);
     }
 
     @SneakyThrows
     public static void setPrivateField(Class<?> clazz, String field, Object newValue) {
+        if (clazz == null) {
+            throw new IllegalArgumentException("Class cannot be null");
+        }
+
+        if (field == null) {
+            throw new IllegalArgumentException("Field cannot be null");
+        }
+
+        if (fieldCache.contains(clazz, field)) {
+            Field objectField = fieldCache.get(clazz, field);
+            objectField.set(null, newValue);
+            return;
+        }
+
         Field objectField = clazz.getDeclaredField(field);
+
+        fieldCache.put(clazz, field, objectField);
+
         objectField.setAccessible(true);
         objectField.set(null, newValue);
     }
@@ -30,16 +68,33 @@ public class ReflectionUtil {
     @SneakyThrows
     public static Object getPrivateField(Object object, String field) {
         Class<?> clazz = object.getClass();
+
+        if (fieldCache.contains(clazz, field)) {
+            Field objectField = fieldCache.get(clazz, field);
+            objectField.setAccessible(true);
+            return objectField.get(object);
+        }
+
         Field objectField = clazz.getDeclaredField(field);
         objectField.setAccessible(true);
+
+        fieldCache.put(clazz, field, objectField);
 
         return objectField.get(object);
     }
 
     @SneakyThrows
     public static Object getPrivateField(Class<?> clazz, String field) {
+        if (fieldCache.contains(clazz, field)) {
+            Field objectField = fieldCache.get(clazz, field);
+            objectField.setAccessible(true);
+            return objectField.get(null);
+        }
+
         Field objectField = clazz.getDeclaredField(field);
         objectField.setAccessible(true);
+
+        fieldCache.put(clazz, field, objectField);
 
         return objectField.get(null);
     }

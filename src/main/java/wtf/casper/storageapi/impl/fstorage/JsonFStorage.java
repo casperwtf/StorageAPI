@@ -76,7 +76,7 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             this.cache.invalidateAll();
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -104,14 +104,14 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     public CompletableFuture<Void> save(V value) {
         return CompletableFuture.runAsync(() -> {
             cache.put((K) IdUtils.getId(valueClass, value), value);
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Void> remove(V value) {
         return CompletableFuture.runAsync(() -> {
             cache.invalidate((K) IdUtils.getId(valueClass, value));
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
@@ -131,7 +131,7 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
             } catch (final Exception e) {
                 e.printStackTrace();
             }
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override

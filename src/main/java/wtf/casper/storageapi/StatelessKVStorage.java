@@ -37,7 +37,7 @@ public interface StatelessKVStorage<K, V> {
                 v = ((ConstructableValue<K, V>) this).constructValue(key);
                 if (v == null) {
                     throw new RuntimeException("Failed to create default value for V with key " + key
-                            + ". Please create a constructor in " + v.getClass().getSimpleName() + " for only the key.");
+                            + ". Please create a constructor in V for only the key.");
                 }
                 return v;
             }
@@ -102,8 +102,7 @@ public interface StatelessKVStorage<K, V> {
      * Closes the storage/storage connection.
      */
     default CompletableFuture<Void> close() {
-        return CompletableFuture.runAsync(() -> {
-        });
+        return CompletableFuture.completedFuture(null);
     }
 
     /**

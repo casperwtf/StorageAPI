@@ -1,13 +1,12 @@
 package wtf.casper.storageapi.id.utils;
 
-import lombok.SneakyThrows;
 import wtf.casper.storageapi.id.Id;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class IdUtils {
@@ -18,10 +17,14 @@ public final class IdUtils {
 
     public static Object getId(final Class<?> clazz, final Object instance) {
 
-        final List<Field> fields = Arrays.stream(clazz.getDeclaredFields())
-                .filter(field -> !Modifier.isStatic(field.getModifiers()))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
+        final List<Field> fields = new ArrayList<>();
+        for (Field field1 : clazz.getDeclaredFields()) {
+            if (!Modifier.isStatic(field1.getModifiers())) {
+                if (!Modifier.isTransient(field1.getModifiers())) {
+                    fields.add(field1);
+                }
+            }
+        }
 
         for (final Field field : fields) {
             field.setAccessible(true);
@@ -49,10 +52,14 @@ public final class IdUtils {
 
     public static String getIdName(final Class<?> type) {
 
-        final List<Field> fields = Arrays.stream(type.getDeclaredFields())
-                .filter(field -> !Modifier.isStatic(field.getModifiers()))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
+        final List<Field> fields = new ArrayList<>();
+        for (Field field1 : type.getDeclaredFields()) {
+            if (!Modifier.isStatic(field1.getModifiers())) {
+                if (!Modifier.isTransient(field1.getModifiers())) {
+                    fields.add(field1);
+                }
+            }
+        }
 
         for (final Field field : fields) {
             field.setAccessible(true);
@@ -77,10 +84,14 @@ public final class IdUtils {
 
     public static Class<?> getIdClass(final Class<?> type) {
 
-        final List<Field> fields = Arrays.stream(type.getDeclaredFields())
-                .filter(field -> !Modifier.isStatic(field.getModifiers()))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
+        final List<Field> fields = new ArrayList<>();
+        for (Field field1 : type.getDeclaredFields()) {
+            if (!Modifier.isStatic(field1.getModifiers())) {
+                if (!Modifier.isTransient(field1.getModifiers())) {
+                    fields.add(field1);
+                }
+            }
+        }
 
         for (final Field field : fields) {
             field.setAccessible(true);
@@ -104,10 +115,14 @@ public final class IdUtils {
 
     private static Method getIdMethod(final Class<?> type) throws IdNotFoundException {
 
-        final List<Method> methods = Arrays.stream(type.getDeclaredMethods())
-                .filter(method -> !Modifier.isStatic(method.getModifiers()))
-                .filter(method -> !Modifier.isTransient(method.getModifiers()))
-                .toList();
+        final List<Method> methods = new ArrayList<>();
+        for (Method method1 : type.getDeclaredMethods()) {
+            if (!Modifier.isStatic(method1.getModifiers())) {
+                if (!Modifier.isTransient(method1.getModifiers())) {
+                    methods.add(method1);
+                }
+            }
+        }
 
         for (final Method method : methods) {
             method.setAccessible(true);
@@ -124,10 +139,14 @@ public final class IdUtils {
 
     public static Field getIdField(final Class<?> type) throws IdNotFoundException {
 
-        final List<Field> fields = Arrays.stream(type.getDeclaredFields())
-                .filter(field -> !Modifier.isStatic(field.getModifiers()))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
+        final List<Field> fields = new ArrayList<>();
+        for (Field field1 : type.getDeclaredFields()) {
+            if (!Modifier.isStatic(field1.getModifiers())) {
+                if (!Modifier.isTransient(field1.getModifiers())) {
+                    fields.add(field1);
+                }
+            }
+        }
 
         for (final Field field : fields) {
             field.setAccessible(true);
@@ -144,10 +163,14 @@ public final class IdUtils {
 
 
     public static Class<?> getIdType(Class<?> clazz) {
-        final List<Field> fields = Arrays.stream(clazz.getDeclaredFields())
-                .filter(field -> !Modifier.isStatic(field.getModifiers()))
-                .filter(field -> !Modifier.isTransient(field.getModifiers()))
-                .toList();
+        final List<Field> fields = new ArrayList<>();
+        for (Field field1 : clazz.getDeclaredFields()) {
+            if (!Modifier.isStatic(field1.getModifiers())) {
+                if (!Modifier.isTransient(field1.getModifiers())) {
+                    fields.add(field1);
+                }
+            }
+        }
 
         for (final Field field : fields) {
             field.setAccessible(true);
