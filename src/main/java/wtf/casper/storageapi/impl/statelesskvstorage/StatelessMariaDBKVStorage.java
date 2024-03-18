@@ -7,6 +7,7 @@ import wtf.casper.storageapi.Credentials;
 import wtf.casper.storageapi.misc.ISQLKVStorage;
 import wtf.casper.storageapi.utils.Constants;
 
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -96,18 +97,17 @@ public class StatelessMariaDBKVStorage<K, V> implements ISQLKVStorage<K, V> {
     public CompletableFuture<Collection<V>> allValues() {
         return CompletableFuture.supplyAsync(() -> {
             final List<V> values = new ArrayList<>();
-            query("SELECT * FROM " + this.table, statement -> {
-            }, resultSet -> {
-                try {
-                    while (resultSet.next()) {
-                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
-                    }
-                } catch (final SQLException e) {
-                    e.printStackTrace();
-                }
+            ResultSet set = query("SELECT * FROM " + this.table, statement -> {
+            }).join();
 
-                resultSet.close();
-            });
+            try {
+                while (set.next()) {
+                    values.add(Constants.getGson().fromJson(set.getString("data"), this.valueClass));
+                }
+                set.close();
+            } catch (final SQLException e) {
+                e.printStackTrace();
+            }
 
             return values;
         });

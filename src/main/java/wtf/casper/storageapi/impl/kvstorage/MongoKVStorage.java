@@ -107,9 +107,12 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
         return CompletableFuture.runAsync(() -> {
             K key = (K) IdUtils.getId(valueClass, value);
             cache.asMap().putIfAbsent(key, value);
+            Document document = Document.parse(Constants.getGson().toJson(value));
+            Object object = convertUUIDtoString(key);
+            document.put("_id", object);
             getCollection().replaceOne(
-                    new Document("_id", convertUUIDtoString(key)),
-                    Document.parse(Constants.getGson().toJson(value)),
+                    new Document("_id", object),
+                    document,
                     replaceOptions
             );
         }, Constants.DB_THREAD_POOL);
@@ -122,7 +125,9 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
             for (V value : values) {
                 K key = (K) IdUtils.getId(valueClass, value);
                 cache.asMap().putIfAbsent(key, value);
-                documents.add(Document.parse(Constants.getGson().toJson(value)));
+                Document document = Document.parse(Constants.getGson().toJson(value));
+                document.put("_id", convertUUIDtoString(key));
+                documents.add(document);
             }
             getCollection().insertMany(documents);
         }, Constants.DB_THREAD_POOL);

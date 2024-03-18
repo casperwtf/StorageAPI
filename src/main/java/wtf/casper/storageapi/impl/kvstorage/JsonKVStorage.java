@@ -1,21 +1,18 @@
 package wtf.casper.storageapi.impl.kvstorage;
 
 
-import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.SneakyThrows;
 import wtf.casper.storageapi.KVStorage;
 import wtf.casper.storageapi.cache.Cache;
-import wtf.casper.storageapi.cache.CaffeineCache;
+import wtf.casper.storageapi.cache.MapCache;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.utils.Constants;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.Writer;
+import java.io.*;
 import java.lang.reflect.Array;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
 
 public abstract class JsonKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue<K, V> {
@@ -23,22 +20,22 @@ public abstract class JsonKVStorage<K, V> implements KVStorage<K, V>, Constructa
     private final File file;
     private final Class<K> keyClass;
     private final Class<V> valueClass;
-    private Cache<K, V> cache = new CaffeineCache<>(Caffeine.newBuilder().build());
+    private Cache<K, V> cache = new MapCache<>(new HashMap<>());
 
     @SneakyThrows
     public JsonKVStorage(final File file, final Class<K> keyClass, final Class<V> valueClass) {
-        if (!file.exists()) {
-            file.getParentFile().mkdirs();
-            if (!file.createNewFile()) {
-                throw new RuntimeException("Failed to create file " + file.getAbsolutePath());
-            }
-        }
-
         this.file = file;
         this.valueClass = valueClass;
         this.keyClass = keyClass;
 
-        final V[] values = Constants.getGson().fromJson(new FileReader(file), (Class<V[]>) Array.newInstance(valueClass, 0).getClass());
+        if (!file.exists()) {
+            file.getParentFile().mkdirs();
+            return;
+        }
+
+        FileReader json = new FileReader(file);
+        final V[] values = Constants.getGson().fromJson(json, (Class<V[]>) Array.newInstance(valueClass, 0).getClass());
+        json.close();
 
         if (values != null) {
             for (final V value : values) {
@@ -100,9 +97,11 @@ public abstract class JsonKVStorage<K, V> implements KVStorage<K, V>, Constructa
         return CompletableFuture.runAsync(() -> {
             try {
                 boolean delete = this.file.delete();
+
                 if (!delete) {
                     System.out.println("Failed to delete file " + this.file.getAbsolutePath());
                 }
+
                 this.file.createNewFile();
 
                 final Writer writer = new FileWriter(this.file);

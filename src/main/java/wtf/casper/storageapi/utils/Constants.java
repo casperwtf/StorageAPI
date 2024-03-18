@@ -23,7 +23,7 @@ public class Constants {
     public static final Executor DB_THREAD_POOL = Executors.newCachedThreadPool(r -> {
         Thread thread = new Thread(r);
         thread.setDaemon(true);
-        thread.setName("StorageAPI-DB-Thread-" + thread.getId() + "-" + THREAD_COUNTER.incrementAndGet());
+        thread.setName("StorageAPI-DB-Thread-" + THREAD_COUNTER.incrementAndGet());
         return thread;
     });
 

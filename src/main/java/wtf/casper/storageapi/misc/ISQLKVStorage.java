@@ -30,9 +30,9 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
 
         return CompletableFuture.runAsync(() -> {
             for (final V value : values) {
-                this.save(value);
+                this.save(value).join();
             }
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<PreparedStatement> statement, final UnsafeConsumer<ResultSet> result) {
@@ -48,11 +48,15 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
                     e.printStackTrace();
                 }
             } catch (final SQLException e) {
+                if (e.getMessage().contains("[SQLITE_BUSY]")) {
+                    return this.query(query, statement, result).join();
+                }
+
                 logger().warning("Error while executing query: " + query);
                 e.printStackTrace();
             }
             return null;
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<ResultSet> result) {
@@ -75,6 +79,11 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
                 e.printStackTrace();
             }
         } catch (final SQLException e) {
+            if (e.getMessage().contains("[SQLITE_BUSY]")) {
+                this.execute(statement, consumer);
+                return;
+            }
+
             logger().warning("Error while executing query: " + statement);
             e.printStackTrace();
         }
@@ -95,6 +104,11 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
                 e.printStackTrace();
             }
         } catch (final SQLException e) {
+            if (e.getMessage().contains("[SQLITE_BUSY]")) {
+                this.executeQuery(statement, consumer);
+                return;
+            }
+
             logger().warning("Error while executing query: " + statement);
             e.printStackTrace();
         }
@@ -143,7 +157,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
                 statement.setString(1, id.toString());
                 statement.setString(2, json);
             });
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     default CompletableFuture<Void> remove(V value) {
@@ -172,7 +186,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
             }, resultSet -> {
                 try {
                     if (resultSet.next()) {
-                        value.set(Constants.getGson().fromJson(resultSet.getString("data"), value()));
+                        value.set(Constants.getGson().fromJson(resultSet.getString("json"), value()));
                     }
                 } catch (SQLException e) {
                     e.printStackTrace();

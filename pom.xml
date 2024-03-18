@@ -66,10 +66,6 @@
                             <shadedPattern>wtf.casper.storageapi.libs.hikari</shadedPattern>
                         </relocation>
                         <relocation>
-                            <pattern>com.google</pattern>
-                            <shadedPattern>wtf.casper.storageapi.libs.google</shadedPattern>
-                        </relocation>
-                        <relocation>
                             <pattern>dev.dejvokep.boostedyaml</pattern>
                             <shadedPattern>wtf.casper.storageapi.libs.boostedyaml</shadedPattern>
                         </relocation>

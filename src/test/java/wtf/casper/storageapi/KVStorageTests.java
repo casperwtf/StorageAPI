@@ -3,27 +3,29 @@ package wtf.casper.storageapi;
 import lombok.extern.java.Log;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import wtf.casper.storageapi.impl.direct.fstorage.*;
+import wtf.casper.storageapi.impl.direct.fstorage.DirectJsonFStorage;
+import wtf.casper.storageapi.impl.direct.fstorage.DirectMongoFStorage;
+import wtf.casper.storageapi.impl.direct.kvstorage.*;
 
 import java.io.File;
 import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 
 @Log
-public class StorageTests {
+public class KVStorageTests {
 
     @BeforeAll
     public static void setup() {
-        InputStream stream = StorageTests.class.getClassLoader().getResourceAsStream("storage.properties");
+        InputStream stream = KVStorageTests.class.getClassLoader().getResourceAsStream("storage.properties");
         File file = new File("."+File.separator+"storage.properties");
         if (file.exists()) {
-            stream = file.toURI().toASCIIString().contains("jar") ? StorageTests.class.getClassLoader().getResourceAsStream("storage.properties") : null;
+            stream = file.toURI().toASCIIString().contains("jar") ? KVStorageTests.class.getClassLoader().getResourceAsStream("storage.properties") : null;
         }
 
         if (stream == null) {
@@ -57,11 +59,11 @@ public class StorageTests {
 
 
         switch (type) {
-            case MONGODB -> storage = new DirectMongoFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
-            case SQLITE -> throw new UnsupportedOperationException("SQLite is not supported yet!");
-            case SQL -> throw new UnsupportedOperationException("SQL is not supported yet!");
-            case MARIADB -> throw new UnsupportedOperationException("MariaDB is not supported yet!");
-            case JSON -> storage = new DirectJsonFStorage<>(UUID.class, TestObject.class, new File("."+File.separator+"data.json"), TestObject::new);
+            case MONGODB -> storage = new DirectMongoKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
+            case SQLITE -> storage = new DirectSQLiteKVStorage<>(UUID.class, TestObject.class, new File("data.db"), "data", TestObject::new);
+            case SQL -> storage = new DirectSQLKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
+            case MARIADB -> new DirectMariaDBKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
+            case JSON -> storage = new DirectJsonKVStorage<>(UUID.class, TestObject.class, new File("data.json"), TestObject::new);
             default -> throw new IllegalStateException("Unexpected value: " + type);
         }
 
@@ -71,7 +73,7 @@ public class StorageTests {
     }
 
     private static Credentials credentials;
-    private static FieldStorage<UUID, TestObject> storage;
+    private static KVStorage<UUID, TestObject> storage;
 
     private static final List<TestObject> initialData = List.of(
             new TestObject(
@@ -175,94 +177,55 @@ public class StorageTests {
     
     @Test
     public void testTotalData() {
-        log.fine(" --- Testing total data...");
         assertEquals(initialData.size(), storage.allValues().join().size());
         log.fine(" --- Total data test passed!");
     }
 
     @Test
-    public void testStartsWith() {
-        log.fine(" --- Testing filter starts with...");
-
-        Collection<TestObject> street = storage.get(
-                Filter.of("data.address", "1", FilterType.STARTS_WITH)
-        ).join();
-        assertEquals(4, street.size());
-
-        log.fine(" --- Filter starts with test passed!");
-    }
-
-    @Test
-    public void testEndsWith() {
-        log.fine(" --- Testing filter ends with...");
-
-        Collection<TestObject> street = storage.get(
-                Filter.of("name", "a", FilterType.ENDS_WITH)
-        ).join();
-        assertEquals(5, street.size());
-
-        Collection<TestObject> phone = storage.get(
-                Filter.of("data.phone", "0", FilterType.ENDS_WITH)
-        ).join();
-        assertEquals(4, phone.size());
-
-        log.fine(" --- Filter starts with test passed!");
-    }
-
-    @Test
-    public void testGreaterThan() {
-        log.fine(" --- Testing filter greater than...");
-
-        Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.GREATER_THAN)
-        ).join();
-        assertEquals(13, street.size());
-
-        log.fine(" --- Filter greater than test passed!");
-    }
-
-    @Test
-    public void testLessThan() {
-        log.fine(" --- Testing filter less than...");
-
-        Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.LESS_THAN)
-        ).join();
-        assertEquals(2, street.size());
-
-        log.fine(" --- Filter less than test passed!");
-    }
-
-    @Test
-    public void testContains() {
-        log.fine(" --- Testing filter contains...");
-
-        Collection<TestObject> street = storage.get(
-                Filter.of("data.address", "Street", FilterType.CONTAINS),
-                Filter.of("age", 18, FilterType.EQUALS)
-        ).join();
-        assertEquals(1, street.size());
-
-        Collection<TestObject> street1 = storage.get(
-                Filter.of("data.address", "Street", FilterType.CONTAINS)
-        ).join();
-        assertEquals(8, street1.size());
-
-        CompletableFuture<Collection<TestObject>> allStreets = storage.get(
-                Filter.of("data.address", "Street", FilterType.CONTAINS),
-                Filter.of("data.address", "Avenue", FilterType.CONTAINS, SortingType.NONE, Filter.Type.OR)
+    public void testSave() {
+        TestObject testObject = new TestObject(
+                UUID.fromString("00000000-0000-0000-0000-000000000016"), "Test", 100,
+                new TestObjectData("1234 Test Street", "Test Employer", "test@test", "123-456-7890",
+                        100, new TestObjectBalance(100, "USD")
+                )
         );
-        assertEquals(16, allStreets.join().size());
-        log.fine(" --- Filter contains test passed!");
+
+        storage.save(testObject).join();
+        assertEquals(testObject, storage.get(testObject.getId()).join());
+
+        storage.remove(testObject).join();
+        assertEquals(null, storage.get(testObject.getId()).join());
     }
 
     @Test
-    public void testEquals() {
-        log.fine(" --- Testing filter equals...");
+    public void testRemove() {
+        TestObject testObject = new TestObject(
+                UUID.fromString("00000000-0000-0000-0000-000000000017"), "Test", 100,
+                new TestObjectData("1234 Test Street", "Test Employer", "test@test", "123-456-7890",
+                        100, new TestObjectBalance(100, "USD")
+                )
+        );
 
-        Collection<TestObject> usd = storage.get(
-                Filter.of("data.balance.currency", "USD", FilterType.EQUALS)
-        ).join();
-        assertEquals(16, usd.size());
+        storage.save(testObject).join();
+        assertEquals(testObject, storage.get(testObject.getId()).join());
+        storage.remove(testObject).join();
+        assertEquals(null, storage.get(testObject.getId()).join());
+    }
+
+    @Test
+    public void testWrite() {
+        TestObject testObject = new TestObject(
+                UUID.fromString("00000000-0000-0000-0000-000000000018"), "Test", 100,
+                new TestObjectData("1234 Test Street", "Test Employer", "test@test", "123-456-7890",
+                        100, new TestObjectBalance(100, "USD")
+                )
+        );
+
+        storage.save(testObject).join();
+        assertEquals(testObject, storage.get(testObject.getId()).join());
+        storage.write().join();
+        assertEquals(testObject, storage.get(testObject.getId()).join());
+        storage.remove(testObject).join();
+        assertEquals(null, storage.get(testObject.getId()).join());
     }
 }

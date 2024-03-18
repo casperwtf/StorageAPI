@@ -14,6 +14,7 @@ import wtf.casper.storageapi.utils.Constants;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -130,6 +131,24 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
     }
 
     @Override
+    public CompletableFuture<Void> save(V value) {
+        return CompletableFuture.runAsync(() -> {
+            Object id = IdUtils.getId(value);
+            if (id == null) {
+                logger().warning("Could not find id field for " + value().getSimpleName());
+                return;
+            }
+
+            String idName = IdUtils.getIdName(value());
+            String json = Constants.getGson().toJson(value);
+            executeUpdate("INSERT OR REPLACE INTO " + table + " (" + idName + ", json) VALUES (?, ?);", statement -> {
+                statement.setString(1, id.toString());
+                statement.setString(2, json);
+            });
+        }, Constants.DB_THREAD_POOL);
+    }
+
+    @Override
     public CompletableFuture<Void> close() {
         return CompletableFuture.runAsync(this.ds::close, Constants.DB_THREAD_POOL);
     }
@@ -138,19 +157,19 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
     public CompletableFuture<Collection<V>> allValues() {
         return CompletableFuture.supplyAsync(() -> {
             final List<V> values = new ArrayList<>();
-            query("SELECT * FROM " + this.table, statement -> {
-            }, resultSet -> {
+
+            query("SELECT * FROM " + this.table + ";", preparedStatement -> {}, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(Constants.getGson().fromJson(resultSet.getString("data"), this.valueClass));
+                        values.add(Constants.getGson().fromJson(resultSet.getString("json"), this.valueClass));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();
                 }
-            });
+            }).join();
 
             return values;
-        });
+        }, Constants.DB_THREAD_POOL);
     }
 
     @Override
