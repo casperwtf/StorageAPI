@@ -16,7 +16,7 @@ import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.IMongoStorage;
 import wtf.casper.storageapi.misc.MongoProvider;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -67,7 +67,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             getCollection().deleteMany(new Document());
-        }, Constants.EXECUTOR);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -79,12 +79,12 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             List<Document> into = getCollection().find(filter).into(new ArrayList<>());
 
             for (Document document : into) {
-                V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
+                V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
                 collection.add(obj);
             }
 
             return sortingType.sort(collection, field);
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
@@ -97,9 +97,9 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
                 return null;
             }
 
-            V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
+            V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
             return obj;
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
@@ -112,22 +112,34 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
                 return null;
             }
 
-            return Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
-        }, Constants.EXECUTOR);
+            return StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
+        });
     }
 
     @Override
     public CompletableFuture<Void> save(V value) {
         return CompletableFuture.runAsync(() -> {
             K key = (K) IdUtils.getId(valueClass, value);
-            Document document = Document.parse(Constants.getGson().toJson(value));
+            Document document = Document.parse(StorageAPIConstants.getGson().toJson(value));
             document.put("_id", convertUUIDtoString(key));
             getCollection().replaceOne(
                     new Document(idFieldName, convertUUIDtoString(key)),
                     document,
                     replaceOptions
             );
-        }, Constants.EXECUTOR);
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> saveAll(Collection<V> values) {
+        return CompletableFuture.runAsync(() -> {
+            List<Document> documents = new ArrayList<>();
+            for (V value : values) {
+                K key = (K) IdUtils.getId(valueClass, value);
+                documents.add(Document.parse(StorageAPIConstants.getGson().toJson(value)).append("_id", convertUUIDtoString(key)));
+            }
+            getCollection().insertMany(documents);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -139,21 +151,19 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }, Constants.EXECUTOR);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Void> write() {
         // No need to write to mongo
-        return CompletableFuture.runAsync(() -> {
-        }, Constants.EXECUTOR);
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletableFuture<Void> close() {
         // No need to close mongo because it's handled by a provider
-        return CompletableFuture.runAsync(() -> {
-        }, Constants.EXECUTOR);
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
@@ -163,7 +173,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             List<V> collection = new ArrayList<>();
 
             for (Document document : into) {
-                V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
+                V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
                 collection.add(obj);
             }
 

@@ -4,7 +4,6 @@ import dev.dejvokep.boostedyaml.YamlDocument;
 import dev.dejvokep.boostedyaml.block.implementation.Section;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.KeyValue;
-import wtf.casper.storageapi.utils.Constants;
 import wtf.casper.storageapi.utils.ReflectionUtil;
 
 import java.io.IOException;
@@ -49,7 +48,7 @@ public interface StatelessFieldStorage<K, V> {
 
             values.removeIf(v -> Collections.frequency(values, v) > 1);
             return values;
-        }, Constants.EXECUTOR);
+        });
     }
 
     default Collection<V> filterGroup(List<Filter> filters) {
@@ -117,7 +116,7 @@ public interface StatelessFieldStorage<K, V> {
             }
 
             return join.stream().limit(limit).toList();
-        }, Constants.EXECUTOR);
+        });
     }
 
     /**
@@ -141,8 +140,8 @@ public interface StatelessFieldStorage<K, V> {
             if (this instanceof ConstructableValue<?, ?>) {
                 v = ((ConstructableValue<K, V>) this).constructValue(key);
                 if (v == null) {
-                    throw new RuntimeException("Failed to create default value for " + v.getClass().getSimpleName() + " with key " + key
-                            + ". Please create a constructor in " + v.getClass().getSimpleName() + " for only the key.");
+                    throw new RuntimeException("Failed to create default value for V with key " + key + ". " +
+                            "Please create a constructor in V for only the key");
                 }
                 return v;
             }
@@ -153,26 +152,25 @@ public interface StatelessFieldStorage<K, V> {
                     return ReflectionUtil.createInstance(keyValueGetter.value(), key);
                 } catch (final Exception e) {
                     e.printStackTrace();
-                    throw new RuntimeException("Failed to create default value for " + v.getClass().getSimpleName() + " with key " + key + ". " +
-                            "Please create a constructor in " + v.getClass().getSimpleName() + " for only the key.", e);
+                    throw new RuntimeException("Failed to create default value for V with key " + key + ". " +
+                            "Please create a constructor in V for only the key.", e);
                 }
             }
 
             try {
                 if (getClass().getGenericSuperclass() instanceof ParameterizedType parameterizedType) {
                     Type type = parameterizedType.getActualTypeArguments()[1];
-                    System.out.println(type.getTypeName());
                     Class<V> aClass = (Class<V>) Class.forName(type.getTypeName());
                     return ReflectionUtil.createInstance(aClass, key);
                 }
 
-                throw new RuntimeException("Failed to create default value for " + v.getClass().getSimpleName() + " with key " + key + ". " +
-                        "Please create a constructor in " + v.getClass().getSimpleName() + " for only the key.");
+                throw new RuntimeException("Failed to create default value for V with key " + key + ". " +
+                        "Please create a constructor in V for only the key.");
 
             } catch (Exception e) {
                 e.printStackTrace();
-                throw new RuntimeException("Failed to create default value for " + v.getClass().getSimpleName() + " with key " + key + ". " +
-                        "Please create a constructor in " + v.getClass().getSimpleName() + " for only the key.");
+                throw new RuntimeException("Failed to create default value for V with key " + key + ". " +
+                        "Please create a constructor in V for only the key.");
             }
         });
     }
@@ -226,8 +224,7 @@ public interface StatelessFieldStorage<K, V> {
      * Closes the storage/storage connection.
      */
     default CompletableFuture<Void> close() {
-        return CompletableFuture.runAsync(() -> {
-        }, Constants.EXECUTOR);
+        return CompletableFuture.completedFuture(null);
     }
 
     /**
@@ -236,7 +233,7 @@ public interface StatelessFieldStorage<K, V> {
      * @return a future that will complete with a boolean that represents whether the storage contains a value that matches the given field and value.
      */
     default CompletableFuture<Boolean> contains(final String field, final Object value) {
-        return CompletableFuture.supplyAsync(() -> getFirst(field, value).join() != null, Constants.EXECUTOR);
+        return CompletableFuture.supplyAsync(() -> getFirst(field, value).join() != null);
     }
 
     /**
@@ -247,7 +244,7 @@ public interface StatelessFieldStorage<K, V> {
         return CompletableFuture.supplyAsync(() -> {
             storage.allValues().thenAccept((values) -> values.forEach(v -> save(v).join())).join();
             return true;
-        }, Constants.EXECUTOR);
+        });
     }
 
     /**
@@ -276,7 +273,7 @@ public interface StatelessFieldStorage<K, V> {
             } catch (Exception e) {
                 return false;
             }
-        }, Constants.EXECUTOR);
+        });
     }
 
     /**
@@ -298,6 +295,6 @@ public interface StatelessFieldStorage<K, V> {
 
             // Sort the values.
             return sortingType.sort(values, field);
-        }, Constants.EXECUTOR);
+        });
     }
 }

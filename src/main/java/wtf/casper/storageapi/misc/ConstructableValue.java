@@ -1,7 +1,6 @@
 package wtf.casper.storageapi.misc;
 
-import org.objenesis.Objenesis;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 public interface ConstructableValue<K, V> extends KeyValue<K, V> {
 
@@ -10,6 +9,6 @@ public interface ConstructableValue<K, V> extends KeyValue<K, V> {
     }
 
     default V constructValue() {
-        return Constants.OBJENESIS_STD.newInstance(value());
+        return StorageAPIConstants.OBJENESIS_STD.newInstance(value());
     }
 }

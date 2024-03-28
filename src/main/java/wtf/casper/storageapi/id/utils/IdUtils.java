@@ -1,6 +1,5 @@
 package wtf.casper.storageapi.id.utils;
 
-import lombok.SneakyThrows;
 import wtf.casper.storageapi.id.Id;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 
@@ -8,23 +7,22 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public final class IdUtils {
 
-    @SneakyThrows
     public static Object getId(final Object instance) {
         return getId(instance.getClass(), instance);
     }
 
-    @SneakyThrows
     public static Object getId(final Class<?> clazz, final Object instance) {
 
         final List<Field> fields = new ArrayList<>();
         for (Field field1 : clazz.getDeclaredFields()) {
             if (!Modifier.isStatic(field1.getModifiers())) {
-                fields.add(field1);
+                if (!Modifier.isTransient(field1.getModifiers())) {
+                    fields.add(field1);
+                }
             }
         }
 
@@ -35,21 +33,31 @@ public final class IdUtils {
                 continue;
             }
 
-            return field.get(instance);
+            try {
+                return field.get(instance);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
 
-        final Method method = IdUtils.getIdMethod(clazz);
+        try {
+            final Method method = IdUtils.getIdMethod(clazz);
+            return method.invoke(instance);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
 
-        return method.invoke(instance);
     }
 
-    @SneakyThrows
     public static String getIdName(final Class<?> type) {
 
         final List<Field> fields = new ArrayList<>();
         for (Field field1 : type.getDeclaredFields()) {
             if (!Modifier.isStatic(field1.getModifiers())) {
-                fields.add(field1);
+                if (!Modifier.isTransient(field1.getModifiers())) {
+                    fields.add(field1);
+                }
             }
         }
 
@@ -63,19 +71,25 @@ public final class IdUtils {
             return field.getName();
         }
 
-        final Method method = IdUtils.getIdMethod(type);
+        try {
+            final Method method = IdUtils.getIdMethod(type);
 
-        return method.getName();
+            return method.getName();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
 
     }
 
-    @SneakyThrows
     public static Class<?> getIdClass(final Class<?> type) {
 
         final List<Field> fields = new ArrayList<>();
         for (Field field1 : type.getDeclaredFields()) {
             if (!Modifier.isStatic(field1.getModifiers())) {
-                fields.add(field1);
+                if (!Modifier.isTransient(field1.getModifiers())) {
+                    fields.add(field1);
+                }
             }
         }
 
@@ -89,14 +103,14 @@ public final class IdUtils {
             return field.getDeclaringClass();
         }
 
-        final Method method = IdUtils.getIdMethod(type);
+        try {
+            final Method method = IdUtils.getIdMethod(type);
 
-        if (method != null) {
             return method.getDeclaringClass();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
         }
-
-        throw new IdNotFoundException(type);
-
     }
 
     private static Method getIdMethod(final Class<?> type) throws IdNotFoundException {
@@ -104,7 +118,9 @@ public final class IdUtils {
         final List<Method> methods = new ArrayList<>();
         for (Method method1 : type.getDeclaredMethods()) {
             if (!Modifier.isStatic(method1.getModifiers())) {
-                methods.add(method1);
+                if (!Modifier.isTransient(method1.getModifiers())) {
+                    methods.add(method1);
+                }
             }
         }
 
@@ -126,7 +142,9 @@ public final class IdUtils {
         final List<Field> fields = new ArrayList<>();
         for (Field field1 : type.getDeclaredFields()) {
             if (!Modifier.isStatic(field1.getModifiers())) {
-                fields.add(field1);
+                if (!Modifier.isTransient(field1.getModifiers())) {
+                    fields.add(field1);
+                }
             }
         }
 
@@ -144,4 +162,33 @@ public final class IdUtils {
     }
 
 
+    public static Class<?> getIdType(Class<?> clazz) {
+        final List<Field> fields = new ArrayList<>();
+        for (Field field1 : clazz.getDeclaredFields()) {
+            if (!Modifier.isStatic(field1.getModifiers())) {
+                if (!Modifier.isTransient(field1.getModifiers())) {
+                    fields.add(field1);
+                }
+            }
+        }
+
+        for (final Field field : fields) {
+            field.setAccessible(true);
+
+            if (!field.isAnnotationPresent(Id.class)) {
+                continue;
+            }
+
+            return field.getType();
+        }
+
+        try {
+            final Method method = IdUtils.getIdMethod(clazz);
+
+            return method.getReturnType();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 }

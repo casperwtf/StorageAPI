@@ -1,5 +1,6 @@
 package wtf.casper.storageapi.impl.fstorage;
 
+
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.SneakyThrows;
 import org.jetbrains.annotations.Nullable;
@@ -8,9 +9,10 @@ import wtf.casper.storageapi.FilterType;
 import wtf.casper.storageapi.SortingType;
 import wtf.casper.storageapi.cache.Cache;
 import wtf.casper.storageapi.cache.CaffeineCache;
+import wtf.casper.storageapi.cache.MapCache;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 import java.io.File;
 import java.io.FileReader;
@@ -19,19 +21,23 @@ import java.io.Writer;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-//TODO make read from file async instead of keeping it all in memory
 public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, ConstructableValue<K, V> {
 
     private final File file;
     private final Class<K> keyClass;
     private final Class<V> valueClass;
-    private Cache<K, V> cache = new CaffeineCache<>(Caffeine.newBuilder().build());
+    private Cache<K, V> cache = new MapCache<>(new HashMap<>());
 
     @SneakyThrows
     public JsonFStorage(final File file, final Class<K> keyClass, final Class<V> valueClass) {
+        if (file == null) {
+            throw new IllegalArgumentException("File cannot be null");
+        }
+
         if (!file.exists()) {
             file.getParentFile().mkdirs();
             if (!file.createNewFile()) {
@@ -43,7 +49,7 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
         this.valueClass = valueClass;
         this.keyClass = keyClass;
 
-        final V[] values = Constants.getGson().fromJson(new FileReader(file), (Class<V[]>) Array.newInstance(valueClass, 0).getClass());
+        final V[] values = StorageAPIConstants.getGson().fromJson(new FileReader(file), (Class<V[]>) Array.newInstance(valueClass, 0).getClass());
 
         if (values != null) {
             for (final V value : values) {
@@ -76,7 +82,7 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             this.cache.invalidateAll();
-        }, Constants.EXECUTOR);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -84,12 +90,12 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
         return CompletableFuture.supplyAsync(() -> {
             Collection<V> values = cache().asMap().values();
             return sortingType.sort(filter(values, field, value, filterType), field);
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
     public CompletableFuture<V> get(K key) {
-        return CompletableFuture.supplyAsync(() -> cache.getIfPresent(key), Constants.EXECUTOR);
+        return CompletableFuture.supplyAsync(() -> cache.getIfPresent(key));
     }
 
     @Override
@@ -97,43 +103,46 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
         return CompletableFuture.supplyAsync(() -> {
             Collection<V> values = cache().asMap().values();
             return filterFirst(values, field, value, filterType);
-        }, Constants.EXECUTOR);
+        });
     }
 
     @Override
     public CompletableFuture<Void> save(V value) {
         return CompletableFuture.runAsync(() -> {
             cache.put((K) IdUtils.getId(valueClass, value), value);
-        }, Constants.EXECUTOR);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Void> remove(V value) {
         return CompletableFuture.runAsync(() -> {
             cache.invalidate((K) IdUtils.getId(valueClass, value));
-        }, Constants.EXECUTOR);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
             try {
-                this.file.delete();
+                boolean delete = this.file.delete();
+                if (!delete) {
+                    System.out.println("Failed to delete file " + this.file.getAbsolutePath());
+                }
                 this.file.createNewFile();
 
                 final Writer writer = new FileWriter(this.file);
 
-                Constants.getGson().toJson(this.cache.asMap().values(), writer);
+                StorageAPIConstants.getGson().toJson(this.cache.asMap().values(), writer);
                 writer.close();
             } catch (final Exception e) {
                 e.printStackTrace();
             }
-        }, Constants.EXECUTOR);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Collection<V>> allValues() {
-        return CompletableFuture.supplyAsync(() -> cache.asMap().values(), Constants.EXECUTOR);
+        return CompletableFuture.supplyAsync(() -> cache.asMap().values());
     }
 
     private Collection<V> filter(final Collection<V> values, final String field, final Object value, FilterType filterType) {
