@@ -60,10 +60,10 @@ public class KVStorageTests {
 
         switch (type) {
             case MONGODB -> storage = new DirectMongoKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
-            case SQLITE -> storage = new DirectSQLiteKVStorage<>(UUID.class, TestObject.class, new File("data.db"), "data", TestObject::new);
+            case SQLITE -> storage = new DirectSQLiteKVStorage<>(UUID.class, TestObject.class, new File("src/test/resources/data.db"), "data", TestObject::new);
             case SQL -> storage = new DirectSQLKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case MARIADB -> new DirectMariaDBKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
-            case JSON -> storage = new DirectJsonKVStorage<>(UUID.class, TestObject.class, new File("data.json"), TestObject::new);
+            case JSON -> storage = new DirectJsonKVStorage<>(UUID.class, TestObject.class, new File("./src/test/resources/data"), TestObject::new);
             default -> throw new IllegalStateException("Unexpected value: " + type);
         }
 
@@ -227,5 +227,11 @@ public class KVStorageTests {
         assertEquals(testObject, storage.get(testObject.getId()).join());
         storage.remove(testObject).join();
         assertEquals(null, storage.get(testObject.getId()).join());
+    }
+
+    @Test
+    public void testDeleteAll() {
+        storage.deleteAll().join();
+        assertEquals(0, storage.allValues().join().size());
     }
 }

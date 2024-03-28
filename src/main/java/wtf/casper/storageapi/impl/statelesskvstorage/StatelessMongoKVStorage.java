@@ -14,7 +14,7 @@ import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.IMongoStorage;
 import wtf.casper.storageapi.misc.MongoProvider;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -65,7 +65,7 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             getCollection().deleteMany(new Document());
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -78,7 +78,7 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
                 return null;
             }
 
-            return Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
+            return StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
         });
     }
 
@@ -88,10 +88,10 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
             K key = (K) IdUtils.getId(valueClass, value);
             getCollection().replaceOne(
                     new Document("_id", convertUUIDtoString(key)),
-                    Document.parse(Constants.getGson().toJson(value)),
+                    Document.parse(StorageAPIConstants.getGson().toJson(value)),
                     replaceOptions
             );
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -101,11 +101,11 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
                 K key = (K) IdUtils.getId(valueClass, value);
                 getCollection().replaceOne(
                         new Document("_id", convertUUIDtoString(key)),
-                        Document.parse(Constants.getGson().toJson(value)),
+                        Document.parse(StorageAPIConstants.getGson().toJson(value)),
                         replaceOptions
                 );
             }
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -117,7 +117,7 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -139,7 +139,7 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
             List<V> collection = new ArrayList<>();
 
             for (Document document : into) {
-                V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
+                V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
                 collection.add(obj);
             }
 

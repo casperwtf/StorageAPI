@@ -5,7 +5,7 @@ import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import wtf.casper.storageapi.Credentials;
 import wtf.casper.storageapi.misc.ISQLKVStorage;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -78,7 +78,7 @@ public class StatelessSQLKVStorage<K, V> implements ISQLKVStorage<K, V> {
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             execute("DELETE FROM " + this.table + ";");
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -89,7 +89,7 @@ public class StatelessSQLKVStorage<K, V> implements ISQLKVStorage<K, V> {
             } catch (final SQLException e) {
                 e.printStackTrace();
             }
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -101,7 +101,7 @@ public class StatelessSQLKVStorage<K, V> implements ISQLKVStorage<K, V> {
 
             try {
                 while (set.next()) {
-                    values.add(Constants.getGson().fromJson(set.getString("data"), this.valueClass));
+                    values.add(StorageAPIConstants.getGson().fromJson(set.getString("data"), this.valueClass));
                 }
                 set.close();
             } catch (final SQLException e) {

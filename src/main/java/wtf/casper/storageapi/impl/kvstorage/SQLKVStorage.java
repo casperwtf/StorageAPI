@@ -12,7 +12,7 @@ import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.ISQLKVStorage;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 import java.lang.reflect.Field;
 import java.sql.ResultSet;
@@ -97,7 +97,7 @@ public abstract class SQLKVStorage<K, V> implements ConstructableValue<K, V>, KV
             execute("DELETE FROM " + this.table + ";");
             this.cache.invalidateAll();
             createTable();
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -114,7 +114,7 @@ public abstract class SQLKVStorage<K, V> implements ConstructableValue<K, V>, KV
             this.execute("DELETE FROM " + this.table + " WHERE `" + field + "` = ?;", statement -> {
                 statement.setString(1, IdUtils.getId(this.valueClass, value).toString());
             });
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -122,7 +122,7 @@ public abstract class SQLKVStorage<K, V> implements ConstructableValue<K, V>, KV
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
             this.saveAll(this.cache.asMap().values());
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -133,7 +133,7 @@ public abstract class SQLKVStorage<K, V> implements ConstructableValue<K, V>, KV
             } catch (final SQLException e) {
                 e.printStackTrace();
             }
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -145,7 +145,7 @@ public abstract class SQLKVStorage<K, V> implements ConstructableValue<K, V>, KV
 
             try {
                 while (set.next()) {
-                    values.add(Constants.getGson().fromJson(set.getString("data"), this.valueClass));
+                    values.add(StorageAPIConstants.getGson().fromJson(set.getString("data"), this.valueClass));
                 }
                 set.close();
             } catch (final SQLException e) {

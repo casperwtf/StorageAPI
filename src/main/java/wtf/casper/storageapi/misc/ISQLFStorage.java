@@ -5,7 +5,7 @@ import wtf.casper.storageapi.StatelessFieldStorage;
 import wtf.casper.storageapi.id.StorageSerialized;
 import wtf.casper.storageapi.id.Transient;
 import wtf.casper.storageapi.id.utils.IdUtils;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 import wtf.casper.storageapi.utils.Lazy;
 import wtf.casper.storageapi.utils.UnsafeConsumer;
 
@@ -369,7 +369,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
                     }
                 });
             });
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     default void setStatement(PreparedStatement statement, int i, Object value) {

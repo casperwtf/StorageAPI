@@ -10,11 +10,10 @@ import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.exceptions.IdNotFoundException;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ISQLKVStorage;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 import java.io.File;
 import java.lang.reflect.Field;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -104,7 +103,7 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             execute("DELETE FROM " + this.table + ";");
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -119,7 +118,7 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
             this.cache.invalidate((K) IdUtils.getId(this.valueClass, value));
             String field = idField.getName();
             this.execute("DELETE FROM " + this.table + " WHERE " + field + " = '" + IdUtils.getId(this.valueClass, value) + "';");
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -127,7 +126,7 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
     public CompletableFuture<Void> write() {
         return CompletableFuture.runAsync(() -> {
             this.saveAll(this.cache.asMap().values());
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -140,17 +139,17 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
             }
 
             String idName = IdUtils.getIdName(value());
-            String json = Constants.getGson().toJson(value);
+            String json = StorageAPIConstants.getGson().toJson(value);
             executeUpdate("INSERT OR REPLACE INTO " + table + " (" + idName + ", json) VALUES (?, ?);", statement -> {
                 statement.setString(1, id.toString());
                 statement.setString(2, json);
             });
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Void> close() {
-        return CompletableFuture.runAsync(this.ds::close, Constants.DB_THREAD_POOL);
+        return CompletableFuture.runAsync(this.ds::close, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -161,7 +160,7 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
             query("SELECT * FROM " + this.table + ";", preparedStatement -> {}, resultSet -> {
                 try {
                     while (resultSet.next()) {
-                        values.add(Constants.getGson().fromJson(resultSet.getString("json"), this.valueClass));
+                        values.add(StorageAPIConstants.getGson().fromJson(resultSet.getString("json"), this.valueClass));
                     }
                 } catch (final SQLException e) {
                     e.printStackTrace();
@@ -169,7 +168,7 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
             }).join();
 
             return values;
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override

@@ -16,7 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Log
-public class Constants {
+public class StorageAPIConstants {
     public static final ObjenesisStd OBJENESIS_STD = new ObjenesisStd(true);
 
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(0);

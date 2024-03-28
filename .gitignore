@@ -3,8 +3,8 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-data.json
-data.db
+src/test/resources/data/
+src/test/resources/data.db
 dependency-reduced-pom.xml
 
 

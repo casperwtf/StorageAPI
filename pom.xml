@@ -51,11 +51,6 @@
                             </excludes>
                         </filter>
                     </filters>
-<!--                    <artifactSet>-->
-<!--                        <includes>-->
-<!--                            <include>**</include>-->
-<!--                        </includes>-->
-<!--                    </artifactSet>-->
                     <relocations>
                         <relocation>
                             <pattern>dev.dejvokep.boostedyaml</pattern>

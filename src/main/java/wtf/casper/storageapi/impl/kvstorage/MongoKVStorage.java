@@ -17,7 +17,7 @@ import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.IMongoStorage;
 import wtf.casper.storageapi.misc.MongoProvider;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -79,7 +79,7 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
     public CompletableFuture<Void> deleteAll() {
         return CompletableFuture.runAsync(() -> {
             getCollection().deleteMany(new Document());
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -96,7 +96,7 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
                 return null;
             }
 
-            V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
+            V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
             cache.asMap().putIfAbsent(key, obj);
             return obj;
         });
@@ -107,7 +107,7 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
         return CompletableFuture.runAsync(() -> {
             K key = (K) IdUtils.getId(valueClass, value);
             cache.asMap().putIfAbsent(key, value);
-            Document document = Document.parse(Constants.getGson().toJson(value));
+            Document document = Document.parse(StorageAPIConstants.getGson().toJson(value));
             Object object = convertUUIDtoString(key);
             document.put("_id", object);
             getCollection().replaceOne(
@@ -115,7 +115,7 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
                     document,
                     replaceOptions
             );
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -125,12 +125,12 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
             for (V value : values) {
                 K key = (K) IdUtils.getId(valueClass, value);
                 cache.asMap().putIfAbsent(key, value);
-                Document document = Document.parse(Constants.getGson().toJson(value));
+                Document document = Document.parse(StorageAPIConstants.getGson().toJson(value));
                 document.put("_id", convertUUIDtoString(key));
                 documents.add(document);
             }
             getCollection().insertMany(documents);
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -143,7 +143,7 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -165,7 +165,7 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
             List<V> collection = new ArrayList<>();
 
             for (Document document : into) {
-                V obj = Constants.getGson().fromJson(document.toJson(Constants.getJsonWriterSettings()), valueClass);
+                V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
                 collection.add(obj);
             }
 

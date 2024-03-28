@@ -3,7 +3,7 @@ package wtf.casper.storageapi.misc;
 import com.zaxxer.hikari.HikariDataSource;
 import wtf.casper.storageapi.StatelessKVStorage;
 import wtf.casper.storageapi.id.utils.IdUtils;
-import wtf.casper.storageapi.utils.Constants;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 import wtf.casper.storageapi.utils.UnsafeConsumer;
 
 import java.sql.Connection;
@@ -32,7 +32,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
             for (final V value : values) {
                 this.save(value).join();
             }
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<PreparedStatement> statement, final UnsafeConsumer<ResultSet> result) {
@@ -56,7 +56,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
                 e.printStackTrace();
             }
             return null;
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<ResultSet> result) {
@@ -152,12 +152,12 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
             }
 
             String idName = IdUtils.getIdName(value());
-            String json = Constants.getGson().toJson(value);
+            String json = StorageAPIConstants.getGson().toJson(value);
             executeUpdate("INSERT INTO " + table() + " (" + idName + ", json) VALUES (?, ?) ON DUPLICATE KEY UPDATE json = ?;", statement -> {
                 statement.setString(1, id.toString());
                 statement.setString(2, json);
             });
-        }, Constants.DB_THREAD_POOL);
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     default CompletableFuture<Void> remove(V value) {
@@ -186,7 +186,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
             }, resultSet -> {
                 try {
                     if (resultSet.next()) {
-                        value.set(Constants.getGson().fromJson(resultSet.getString("json"), value()));
+                        value.set(StorageAPIConstants.getGson().fromJson(resultSet.getString("json"), value()));
                     }
                 } catch (SQLException e) {
                     e.printStackTrace();
