@@ -166,6 +166,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
     @Override
     public CompletableFuture<Void> saveAll(Collection<V> values) {
         return CompletableFuture.runAsync(() -> {
+            // can this be bulk done?
             for (V value : values) {
                 K key = (K) IdUtils.getId(valueClass, value);
                 cache.asMap().putIfAbsent(key, value);

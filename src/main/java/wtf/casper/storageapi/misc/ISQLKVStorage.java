@@ -172,7 +172,7 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
             executeUpdate("DELETE FROM " + table() + " WHERE `" + idName + "` = ?;", statement -> {
                 statement.setString(1, id.toString());
             });
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     default CompletableFuture<V> get(K key) {
@@ -196,6 +196,6 @@ public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, Construct
             }).join();
 
             return value.get();
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

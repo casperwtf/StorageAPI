@@ -90,7 +90,7 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
         return CompletableFuture.supplyAsync(() -> {
             Collection<V> values = cache().asMap().values();
             return sortingType.sort(filter(values, field, value, filterType), field);
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -103,7 +103,7 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
         return CompletableFuture.supplyAsync(() -> {
             Collection<V> values = cache().asMap().values();
             return filterFirst(values, field, value, filterType);
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -142,7 +142,7 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
 
     @Override
     public CompletableFuture<Collection<V>> allValues() {
-        return CompletableFuture.supplyAsync(() -> cache.asMap().values());
+        return CompletableFuture.supplyAsync(() -> cache.asMap().values(), StorageAPIConstants.DB_THREAD_POOL);
     }
 
     private Collection<V> filter(final Collection<V> values, final String field, final Object value, FilterType filterType) {

@@ -153,6 +153,6 @@ public abstract class SQLKVStorage<K, V> implements ConstructableValue<K, V>, KV
             }
 
             return values;
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

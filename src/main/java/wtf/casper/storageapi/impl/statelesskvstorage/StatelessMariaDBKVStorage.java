@@ -110,6 +110,6 @@ public class StatelessMariaDBKVStorage<K, V> implements ISQLKVStorage<K, V> {
             }
 
             return values;
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

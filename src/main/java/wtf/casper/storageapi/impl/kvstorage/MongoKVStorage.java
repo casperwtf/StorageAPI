@@ -99,7 +99,7 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
             V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
             cache.asMap().putIfAbsent(key, obj);
             return obj;
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -170,6 +170,6 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
             }
 
             return collection;
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

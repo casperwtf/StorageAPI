@@ -84,7 +84,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             }
 
             return sortingType.sort(collection, field);
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -99,7 +99,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
 
             V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
             return obj;
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -113,7 +113,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             }
 
             return StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -178,6 +178,6 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             }
 
             return collection;
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

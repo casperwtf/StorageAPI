@@ -79,7 +79,7 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
             }
 
             return StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -144,6 +144,6 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
             }
 
             return collection;
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

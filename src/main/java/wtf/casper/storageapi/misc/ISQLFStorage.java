@@ -49,7 +49,7 @@ public interface ISQLFStorage<K, V> extends StatelessFieldStorage<K, V>, Constru
                 e.printStackTrace();
             }
             return null;
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     default CompletableFuture<ResultSet> query(final String query, final UnsafeConsumer<ResultSet> result) {

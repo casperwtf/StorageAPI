@@ -20,10 +20,11 @@ public class StorageAPIConstants {
     public static final ObjenesisStd OBJENESIS_STD = new ObjenesisStd(true);
 
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(0);
+    // package name so it gets relocated properly & turns to a different named threadpool
     public static final Executor DB_THREAD_POOL = Executors.newCachedThreadPool(r -> {
         Thread thread = new Thread(r);
         thread.setDaemon(true);
-        thread.setName("StorageAPI-DB-Thread-" + THREAD_COUNTER.incrementAndGet());
+        thread.setName("wtf.casper.storageapi DB-Thread-" + THREAD_COUNTER.incrementAndGet());
         return thread;
     });
 

@@ -5,6 +5,7 @@ import dev.dejvokep.boostedyaml.block.implementation.Section;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.KeyValue;
 import wtf.casper.storageapi.utils.ReflectionUtil;
+import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 import java.io.IOException;
 import java.lang.reflect.ParameterizedType;
@@ -48,7 +49,7 @@ public interface StatelessFieldStorage<K, V> {
 
             values.removeIf(v -> Collections.frequency(values, v) > 1);
             return values;
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     default Collection<V> filterGroup(List<Filter> filters) {
@@ -116,7 +117,7 @@ public interface StatelessFieldStorage<K, V> {
             }
 
             return join.stream().limit(limit).toList();
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     /**
@@ -202,7 +203,7 @@ public interface StatelessFieldStorage<K, V> {
      * @param values the values to save.
      */
     default CompletableFuture<Void> saveAll(final Collection<V> values) {
-        return CompletableFuture.runAsync(() -> values.forEach(v -> save(v).join()));
+        return CompletableFuture.runAsync(() -> values.forEach(v -> save(v).join()), StorageAPIConstants.DB_THREAD_POOL);
     }
 
     /**
@@ -233,7 +234,7 @@ public interface StatelessFieldStorage<K, V> {
      * @return a future that will complete with a boolean that represents whether the storage contains a value that matches the given field and value.
      */
     default CompletableFuture<Boolean> contains(final String field, final Object value) {
-        return CompletableFuture.supplyAsync(() -> getFirst(field, value).join() != null);
+        return CompletableFuture.supplyAsync(() -> getFirst(field, value).join() != null, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     /**
@@ -244,7 +245,7 @@ public interface StatelessFieldStorage<K, V> {
         return CompletableFuture.supplyAsync(() -> {
             storage.allValues().thenAccept((values) -> values.forEach(v -> save(v).join())).join();
             return true;
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     /**
@@ -273,7 +274,7 @@ public interface StatelessFieldStorage<K, V> {
             } catch (Exception e) {
                 return false;
             }
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     /**
@@ -295,6 +296,6 @@ public interface StatelessFieldStorage<K, V> {
 
             // Sort the values.
             return sortingType.sort(values, field);
-        });
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }
