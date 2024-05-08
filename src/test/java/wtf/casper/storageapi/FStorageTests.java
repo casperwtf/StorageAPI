@@ -11,7 +11,6 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 
 @Log
 public class FStorageTests {
