@@ -139,7 +139,7 @@ public class MongoKVStorage<K, V> implements KVStorage<K, V>, ConstructableValue
             try {
                 K id = (K) IdUtils.getId(valueClass, key);
                 cache.invalidate(id);
-                getCollection().deleteMany(getDocument(FilterType.EQUALS, "_id", convertUUIDtoString(id)));
+                getCollection().deleteMany(new Document("_id", convertUUIDtoString(id)));
             } catch (Exception e) {
                 e.printStackTrace();
             }

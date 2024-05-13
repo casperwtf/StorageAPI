@@ -121,7 +121,7 @@ public interface StatelessKVStorage<K, V> {
     default CompletableFuture<Boolean> migrate(final StatelessKVStorage<K, V> storage) {
         return CompletableFuture.supplyAsync(() -> {
             Collection<V> vs = storage.allValues().join();
-            saveAll(vs).join(); // save all will batch if the implementation supports it (mongo)
+            saveAll(vs).join(); // save all will batch if the implementation supports it (mongo for example)
             return true;
         }, StorageAPIConstants.DB_THREAD_POOL);
     }

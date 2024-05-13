@@ -113,7 +113,7 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
         return CompletableFuture.runAsync(() -> {
             try {
                 K id = (K) IdUtils.getId(valueClass, key);
-                getCollection().deleteMany(getDocument(FilterType.EQUALS, "_id", convertUUIDtoString(id)));
+                getCollection().deleteMany(new Document(idFieldName, convertUUIDtoString(id)));
             } catch (Exception e) {
                 e.printStackTrace();
             }
