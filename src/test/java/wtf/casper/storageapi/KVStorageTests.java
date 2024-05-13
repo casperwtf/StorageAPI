@@ -3,17 +3,13 @@ package wtf.casper.storageapi;
 import lombok.extern.java.Log;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import wtf.casper.storageapi.impl.direct.fstorage.DirectJsonFStorage;
-import wtf.casper.storageapi.impl.direct.fstorage.DirectMongoFStorage;
 import wtf.casper.storageapi.impl.direct.kvstorage.*;
 
 import java.io.File;
 import java.io.InputStream;
-import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertEquals;
 

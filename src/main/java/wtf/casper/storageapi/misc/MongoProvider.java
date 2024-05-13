@@ -20,6 +20,7 @@ public class MongoProvider {
         if (clients.containsKey(uri)) {
             MongoClient client = clients.get(uri);
             try {
+                // Test connection
                 client.getAddress();
                 client.getConnectPoint();
                 ClientSession session = client.startSession();

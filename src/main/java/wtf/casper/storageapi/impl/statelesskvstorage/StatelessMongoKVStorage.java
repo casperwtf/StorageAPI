@@ -8,7 +8,6 @@ import lombok.Getter;
 import lombok.extern.java.Log;
 import org.bson.Document;
 import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.FilterType;
 import wtf.casper.storageapi.StatelessKVStorage;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;

@@ -6,7 +6,6 @@ import lombok.SneakyThrows;
 import wtf.casper.storageapi.KVStorage;
 import wtf.casper.storageapi.cache.Cache;
 import wtf.casper.storageapi.cache.CaffeineCache;
-import wtf.casper.storageapi.cache.MapCache;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.utils.StorageAPIConstants;

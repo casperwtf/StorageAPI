@@ -7,7 +7,10 @@ import wtf.casper.storageapi.impl.direct.fstorage.*;
 
 import java.io.File;
 import java.io.InputStream;
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertEquals;

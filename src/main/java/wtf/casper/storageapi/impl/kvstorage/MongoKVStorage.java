@@ -9,7 +9,6 @@ import lombok.Getter;
 import lombok.extern.java.Log;
 import org.bson.Document;
 import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.FilterType;
 import wtf.casper.storageapi.KVStorage;
 import wtf.casper.storageapi.cache.Cache;
 import wtf.casper.storageapi.cache.CaffeineCache;
