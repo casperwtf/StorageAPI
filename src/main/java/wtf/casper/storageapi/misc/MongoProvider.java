@@ -1,10 +1,11 @@
 package wtf.casper.storageapi.misc;
 
-import com.mongodb.MongoClient;
-import com.mongodb.MongoClientOptions;
+import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
-import com.mongodb.MongoClientURI;
+import com.mongodb.MongoDriverInformation;
 import com.mongodb.client.ClientSession;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.internal.MongoClientImpl;
 import org.bson.UuidRepresentation;
 import org.bson.codecs.configuration.CodecRegistries;
 import org.bson.codecs.pojo.PojoCodecProvider;
@@ -21,8 +22,6 @@ public class MongoProvider {
             MongoClient client = clients.get(uri);
             try {
                 // Test connection
-                client.getAddress();
-                client.getConnectPoint();
                 ClientSession session = client.startSession();
                 session.close();
                 return client;
@@ -32,14 +31,16 @@ public class MongoProvider {
             }
         }
 
-        MongoClientURI mongoClientURI = new MongoClientURI(uri, MongoClientOptions.builder()
+        MongoClient client = new MongoClientImpl(MongoClientSettings.builder()
+                .applyConnectionString(new ConnectionString(uri))
                 .uuidRepresentation(UuidRepresentation.JAVA_LEGACY)
                 .codecRegistry(CodecRegistries.fromRegistries(
                         MongoClientSettings.getDefaultCodecRegistry(),
                         CodecRegistries.fromProviders(PojoCodecProvider.builder().automatic(true).build())
                 ))
+                .build(), MongoDriverInformation.builder().build()
         );
-        MongoClient client = new MongoClient(mongoClientURI);
+
         clients.put(uri, client);
         return client;
     }
