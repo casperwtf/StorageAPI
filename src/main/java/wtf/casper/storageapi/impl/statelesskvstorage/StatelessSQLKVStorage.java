@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
@@ -109,6 +110,22 @@ public class StatelessSQLKVStorage<K, V> implements ISQLKVStorage<K, V> {
             }
 
             return values;
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> renameField(String path, String newPath) {
+        return CompletableFuture.runAsync(() -> {
+            execute("ALTER TABLE " + this.table + " CHANGE " + path + " " + newPath + " TEXT;");
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> renameFields(Map<String, String> pathToNewPath) {
+        return CompletableFuture.runAsync(() -> {
+            for (Map.Entry<String, String> entry : pathToNewPath.entrySet()) {
+                execute("ALTER TABLE " + this.table + " CHANGE " + entry.getKey() + " " + entry.getValue() + " TEXT;");
+            }
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

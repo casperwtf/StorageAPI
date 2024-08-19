@@ -2,6 +2,7 @@ package wtf.casper.storageapi.impl.kvstorage;
 
 
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.google.gson.JsonObject;
 import lombok.SneakyThrows;
 import wtf.casper.storageapi.KVStorage;
 import wtf.casper.storageapi.cache.Cache;
@@ -13,6 +14,7 @@ import wtf.casper.storageapi.utils.StorageAPIConstants;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -195,6 +197,86 @@ public abstract class JsonKVStorage<K, V> implements KVStorage<K, V>, Constructa
             }
 
             return cache.asMap().values();
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> renameField(String path, String newPath) {
+        return CompletableFuture.runAsync(() -> {
+            File[] files = dataFolder.listFiles();
+            if (files == null) {
+                return;
+            }
+
+            cache().invalidateAll();
+            for (File file : files) {
+                if (!file.getName().endsWith(".json")) {
+                    continue;
+                }
+
+                try {
+                    final Reader reader = new FileReader(file);
+                    final JsonObject value = StorageAPIConstants.getGson().fromJson(reader, JsonObject.class);
+                    reader.close();
+
+                    if (value == null) {
+                        continue;
+                    }
+
+                    if (value.has(path)) {
+                        value.add(newPath, value.get(path));
+                        value.remove(path);
+                    }
+
+                    final Writer writer = new FileWriter(file);
+                    StorageAPIConstants.getGson().toJson(value, writer);
+                    writer.close();
+                } catch (final Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            cache().invalidateAll();
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> renameFields(Map<String, String> pathToNewPath) {
+        return CompletableFuture.runAsync(() -> {
+            File[] files = dataFolder.listFiles();
+            if (files == null) {
+                return;
+            }
+
+            cache().invalidateAll();
+            for (File file : files) {
+                if (!file.getName().endsWith(".json")) {
+                    continue;
+                }
+
+                try {
+                    final Reader reader = new FileReader(file);
+                    final JsonObject value = StorageAPIConstants.getGson().fromJson(reader, JsonObject.class);
+                    reader.close();
+
+                    if (value == null) {
+                        continue;
+                    }
+
+                    for (Map.Entry<String, String> entry : pathToNewPath.entrySet()) {
+                        if (value.has(entry.getKey())) {
+                            value.add(entry.getValue(), value.get(entry.getKey()));
+                            value.remove(entry.getKey());
+                        }
+                    }
+
+                    final Writer writer = new FileWriter(file);
+                    StorageAPIConstants.getGson().toJson(value, writer);
+                    writer.close();
+                } catch (final Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            cache().invalidateAll();
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

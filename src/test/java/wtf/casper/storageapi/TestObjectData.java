@@ -40,6 +40,7 @@ public class TestObjectData {
                 ", phone='" + phone + '\'' +
                 ", age=" + age +
                 ", balance=" + balance +
+                ", balanceMap=" + balanceMap +
                 '}';
     }
 }

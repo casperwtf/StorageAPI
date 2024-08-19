@@ -8,6 +8,7 @@ import wtf.casper.storageapi.impl.direct.kvstorage.*;
 import java.io.File;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -58,8 +59,17 @@ public class KVStorageTests {
             case MONGODB -> storage = new DirectMongoKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case SQLITE -> storage = new DirectSQLiteKVStorage<>(UUID.class, TestObject.class, new File("src/test/resources/data.db"), "data", TestObject::new);
             case SQL -> storage = new DirectSQLKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
-            case MARIADB -> new DirectMariaDBKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
+            case MARIADB -> storage = new DirectMariaDBKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case JSON -> storage = new DirectJsonKVStorage<>(UUID.class, TestObject.class, new File("./src/test/resources/data"), TestObject::new);
+            default -> throw new IllegalStateException("Unexpected value: " + type);
+        }
+
+        switch (type) {
+            case MONGODB -> storageOther = new DirectMongoKVStorage<>(UUID.class, TestObjectOther.class, credentials, TestObjectOther::new);
+            case SQLITE -> storageOther = new DirectSQLiteKVStorage<>(UUID.class, TestObjectOther.class, new File("src/test/resources/data.db"), "data", TestObjectOther::new);
+            case SQL -> storageOther = new DirectSQLKVStorage<>(UUID.class, TestObjectOther.class, credentials, TestObjectOther::new);
+            case MARIADB -> storageOther = new DirectMariaDBKVStorage<>(UUID.class, TestObjectOther.class, credentials, TestObjectOther::new);
+            case JSON -> storageOther = new DirectJsonKVStorage<>(UUID.class, TestObjectOther.class, new File("./src/test/resources/data"), TestObjectOther::new);
             default -> throw new IllegalStateException("Unexpected value: " + type);
         }
 
@@ -70,6 +80,7 @@ public class KVStorageTests {
 
     private static Credentials credentials;
     private static KVStorage<UUID, TestObject> storage;
+    private static KVStorage<UUID, TestObjectOther> storageOther;
 
     private static final List<TestObject> initialData = List.of(
             new TestObject(
@@ -230,4 +241,89 @@ public class KVStorageTests {
         storage.deleteAll().join();
         assertEquals(0, storage.allValues().join().size());
     }
+
+    @Test
+    public void testChangeFieldName() {
+        TestObject testObject = new TestObject(
+                UUID.fromString("00000000-0000-0000-0000-000000000019"), "Test", 100,
+                new TestObjectData("1234 Test Street", "Test Employer", "test@test", "123-456-7890",
+                        100, new TestObjectBalance(100, "USD")
+                )
+        );
+
+        storage.save(testObject).join();
+
+        storage.renameField("id", "idOther").join();
+        storage.renameField("name", "nameOther").join();
+        storage.renameField("age", "ageOther").join();
+
+        TestObjectOther join;
+        try {
+             join = storageOther.get(UUID.fromString("00000000-0000-0000-0000-000000000019")).join();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        if (join == null) {
+            throw new RuntimeException("Join is null");
+        }
+
+        assertEquals(testObject.getId(), join.getIdOther());
+        assertEquals(testObject.getName(), join.getNameOther());
+        assertEquals(testObject.getAge(), join.getAgeOther());
+        assertEquals(testObject.getData().getAge(), join.getData().getAge());
+
+        storage.renameField("idOther", "id").join();
+        storage.renameField("nameOther", "name").join();
+        storage.renameField("ageOther", "age").join();
+
+        TestObject object = storage.get(testObject.getId()).join();
+        assertEquals(testObject, object);
+
+        storageOther.remove(join).join();
+    }
+
+    @Test
+    public void testChangeFieldNames() {
+        TestObject testObject = new TestObject(
+                UUID.fromString("00000000-0000-0000-0000-000000000019"), "Test", 100,
+                new TestObjectData("1234 Test Street", "Test Employer", "test@test", "123-456-7890",
+                        100, new TestObjectBalance(100, "USD")
+                )
+        );
+
+        storage.save(testObject).join();
+
+        storage.renameFields(Map.of(
+                "id", "idOther",
+                "name", "nameOther",
+                "age", "ageOther"
+        )).join();
+
+        TestObjectOther join;
+        try {
+            join = storageOther.get(UUID.fromString("00000000-0000-0000-0000-000000000019")).join();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        if (join == null) {
+            throw new RuntimeException("Join is null");
+        }
+
+        assertEquals(testObject.getId(), join.getIdOther());
+        assertEquals(testObject.getName(), join.getNameOther());
+        assertEquals(testObject.getAge(), join.getAgeOther());
+        assertEquals(testObject.getData().getAge(), join.getData().getAge());
+
+        storage.renameFields(Map.of(
+                "idOther", "id",
+                "nameOther", "name",
+                "ageOther", "age"
+        )).join();
+
+        TestObject object = storage.get(testObject.getId()).join();
+        assertEquals(testObject, object);
+
+        storage.remove(testObject).join();
+    }
+
 }

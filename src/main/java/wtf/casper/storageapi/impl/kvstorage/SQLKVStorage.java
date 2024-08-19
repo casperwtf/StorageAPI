@@ -20,6 +20,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -153,6 +154,28 @@ public abstract class SQLKVStorage<K, V> implements ConstructableValue<K, V>, KV
             }
 
             return values;
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> renameFields(Map<String, String> pathToNewPath) {
+        return CompletableFuture.runAsync(() -> {
+            cache().invalidateAll();
+            for (Map.Entry<String, String> entry : pathToNewPath.entrySet()) {
+                execute("UPDATE " + this.table + " SET data = JSON_SET(data, '$." + entry.getValue() + "', JSON_EXTRACT(data, '$." + entry.getKey() + "'));");
+                execute("UPDATE " + this.table + " SET data = JSON_REMOVE(data, '$." + entry.getKey() + "');");
+            }
+            cache().invalidateAll();
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> renameField(String path, String newPath) {
+        return CompletableFuture.runAsync(() -> {
+            cache().invalidateAll();
+            execute("UPDATE " + this.table + " SET data = JSON_SET(data, '$." + newPath + "', JSON_EXTRACT(data, '$." + path + "'));");
+            execute("UPDATE " + this.table + " SET data = JSON_REMOVE(data, '$." + path + "');");
+            cache().invalidateAll();
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

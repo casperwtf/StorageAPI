@@ -18,6 +18,7 @@ import wtf.casper.storageapi.utils.StorageAPIConstants;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 @Log
@@ -143,6 +144,28 @@ public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, 
             }
 
             return collection;
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> renameFields(Map<String, String> pathToNewPath) {
+        return CompletableFuture.runAsync(() -> {
+            for (Map.Entry<String, String> entry : pathToNewPath.entrySet()) {
+                getCollection().updateMany(
+                        new Document(),
+                        new Document("$rename", new Document(entry.getKey(), entry.getValue()))
+                );
+            }
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> renameField(String path, String newPath) {
+        return CompletableFuture.runAsync(() -> {
+            getCollection().updateMany(
+                    new Document(),
+                    new Document("$rename", new Document(path, newPath))
+            );
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

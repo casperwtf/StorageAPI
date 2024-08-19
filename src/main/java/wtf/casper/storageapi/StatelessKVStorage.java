@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
@@ -154,6 +155,10 @@ public interface StatelessKVStorage<K, V> {
             }
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
+
+    CompletableFuture<Void> renameField(String path, String newPath);
+
+    CompletableFuture<Void> renameFields(Map<String, String> pathToNewPath);
 
     /**
      * @return a future that will complete with a collection of all values in the storage.

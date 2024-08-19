@@ -15,10 +15,7 @@ import wtf.casper.storageapi.utils.StorageAPIConstants;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -179,5 +176,29 @@ public abstract class SQLiteKVStorage<K, V> implements ISQLKVStorage<K, V>, KVSt
         idType = idName + " " + idType + " PRIMARY KEY";
 
         execute("CREATE TABLE IF NOT EXISTS " + table() + " (" + idType + ", json TEXT NOT NULL);");
+    }
+
+    @Override
+    public CompletableFuture<Void> renameField(String path, String newPath) {
+        return CompletableFuture.runAsync(() -> {
+            cache().invalidateAll();
+            execute("UPDATE " + this.table + " SET json = JSON_SET(json, '$." + newPath + "', JSON_EXTRACT(json, '$." + path + "'))," +
+                    " json = JSON_REMOVE(json, '$." + path + "')", statement -> {
+            });
+            cache().invalidateAll();
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> renameFields(Map<String, String> pathToNewPath) {
+        return CompletableFuture.runAsync(() -> {
+            cache().invalidateAll();
+            pathToNewPath.forEach((path, newPath) -> {
+                execute("UPDATE " + this.table + " SET json = JSON_SET(json, '$." + newPath + "', JSON_EXTRACT(json, '$." + path + "'))," +
+                        " json = JSON_REMOVE(json, '$." + path + "')", statement -> {
+                });
+            });
+            cache().invalidateAll();
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

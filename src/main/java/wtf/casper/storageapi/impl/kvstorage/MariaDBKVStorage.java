@@ -20,6 +20,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -159,4 +160,27 @@ public abstract class MariaDBKVStorage<K, V> implements ConstructableValue<K, V>
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
+    @Override
+    public CompletableFuture<Void> renameField(String path, String newPath) {
+        return CompletableFuture.runAsync(() -> {
+            cache().invalidateAll();
+            this.execute("UPDATE " + this.table + " SET data = JSON_SET(data, '$." + newPath + "', JSON_EXTRACT(data, '$." + path + "'))," +
+                    " data = JSON_REMOVE(data, '$." + path + "')", statement -> {
+            });
+            cache().invalidateAll();
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> renameFields(Map<String, String> pathToNewPath) {
+        return CompletableFuture.runAsync(() -> {
+            cache().invalidateAll();
+            pathToNewPath.forEach((path, newPath) -> {
+                this.execute("UPDATE " + this.table + " SET data = JSON_SET(data, '$." + newPath + "', JSON_EXTRACT(data, '$." + path + "'))," +
+                        " data = JSON_REMOVE(data, '$." + path + "')", statement -> {
+                });
+            });
+            cache().invalidateAll();
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
 }
