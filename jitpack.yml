@@ -4,5 +4,4 @@ before_install:
 jdk:
   - openjdk17
 install:
-  - echo "Running a custom install command"
-  - mvn clean install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+  - mvn package -DskipTests=true -Dmaven.javadoc.skip=true -B -V
