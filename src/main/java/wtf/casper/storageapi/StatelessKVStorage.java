@@ -1,19 +1,15 @@
 package wtf.casper.storageapi;
 
-import dev.dejvokep.boostedyaml.YamlDocument;
-import dev.dejvokep.boostedyaml.block.implementation.Section;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.KeyValue;
 import wtf.casper.storageapi.utils.ReflectionUtil;
 import wtf.casper.storageapi.utils.StorageAPIConstants;
 
-import java.io.IOException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 
 public interface StatelessKVStorage<K, V> {
 
@@ -124,35 +120,6 @@ public interface StatelessKVStorage<K, V> {
             Collection<V> vs = storage.allValues().join();
             saveAll(vs).join(); // save all will batch if the implementation supports it (mongo for example)
             return true;
-        }, StorageAPIConstants.DB_THREAD_POOL);
-    }
-
-    /**
-     * @param oldStorageSupplier supplier to provide the old storage
-     * @param config             the config
-     * @param path               the path to the storage
-     * @return a future that will complete with a boolean that represents whether the migration was successful.
-     */
-    default CompletableFuture<Boolean> migrateFrom(Supplier<StatelessKVStorage<K, V>> oldStorageSupplier, YamlDocument config, String path) {
-        return CompletableFuture.supplyAsync(() -> {
-            if (config == null) return false;
-            Section section = config.getSection(path);
-            if (section == null) return false;
-            if (!section.getBoolean("migrate", false)) return false;
-            section.set("migrate", false);
-            try {
-                config.save();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            // storage that we are migrating to the new storage
-            StatelessKVStorage<K, V> oldStorage = oldStorageSupplier.get();
-            try {
-                this.migrate(oldStorage).join();
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
