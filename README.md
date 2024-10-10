@@ -1,7 +1,50 @@
 # Description
-StorageAPI is an easy way to query and store data.
+StorageAPI is an easy way to query and store data. StorageAPI is setup to be ran asynchronously, so you don't have to worry about blocking the main thread. This is done through the java completable future API.
 
-StorageAPI is setup to be ran asynchronously, so you don't have to worry about blocking the main thread. This is done through the java completable future API.
+
+# Adding the repository
+```xml
+<repository>
+  <id>casperwtf respository-releases</id>
+  <name>casperwtf Repository</name>
+  <url>https://maven.casper.wtf/releases</url>
+</repository>
+```
+
+```groovy
+maven {
+    name "casperwtf respositoryReleases"
+    url "https://maven.casper.wtf/releases"
+}
+```
+
+# Adding the dependency
+```xml
+<dependency>
+    <groupId>wtf.casper.storageapi</groupId>
+    <artifactId>StorageAPI</artifactId>
+    <version>LATEST RELEASE</version>
+</dependency>
+```
+
+```groovy
+implementation "wtf.casper.storageapi:StorageAPI:LATEST RELEASE"
+```
+
+# Relocating
+```xml
+<relocation>
+    <pattern>wtf.casper.storageapi</pattern>
+    <shadedPattern>your.package.here.storageapi</shadedPattern>
+</relocation>
+```
+
+```groovy
+shadowJar {
+    relocate "wtf.casper.storageapi", "your.package.here.storageapi"
+}
+```
+
 # Create credentials object
 ```java
 //Spigot/YAML Configuration method to make configuration

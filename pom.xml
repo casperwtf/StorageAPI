@@ -6,7 +6,7 @@
 
     <groupId>wtf.casper.storageapi</groupId>
     <artifactId>StorageAPI</artifactId>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -19,12 +19,12 @@
         <repository>
             <id>casperwtf respository-releases</id>
             <name>casperwtf Repository</name>
-            <url>http://185.135.158.51:8080/releases</url>
+            <url>https://maven.casper.wtf/releases</url>
         </repository>
         <snapshotRepository>
             <id>casperwtf respository-snapshots</id>
             <name>casperwtf Repository</name>
-            <url>http://185.135.158.51:8080/snapshots</url>
+            <url>https://maven.casper.wtf/snapshots</url>
         </snapshotRepository>
     </distributionManagement>
 
