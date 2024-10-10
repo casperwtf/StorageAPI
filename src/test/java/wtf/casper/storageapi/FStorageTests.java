@@ -172,26 +172,19 @@ public class FStorageTests {
     
     @Test
     public void testTotalData() {
-        log.fine(" --- Testing total data...");
         assertEquals(initialData.size(), storage.allValues().join().size());
-        log.fine(" --- Total data test passed!");
     }
 
     @Test
     public void testStartsWith() {
-        log.fine(" --- Testing filter starts with...");
-
         Collection<TestObject> street = storage.get(
                 Filter.of("data.address", "1", FilterType.STARTS_WITH)
         ).join();
         assertEquals(4, street.size());
-
-        log.fine(" --- Filter starts with test passed!");
     }
 
     @Test
     public void testEndsWith() {
-        log.fine(" --- Testing filter ends with...");
 
         Collection<TestObject> street = storage.get(
                 Filter.of("name", "a", FilterType.ENDS_WITH)
@@ -202,38 +195,26 @@ public class FStorageTests {
                 Filter.of("data.phone", "0", FilterType.ENDS_WITH)
         ).join();
         assertEquals(4, phone.size());
-
-        log.fine(" --- Filter starts with test passed!");
     }
 
     @Test
     public void testGreaterThan() {
-        log.fine(" --- Testing filter greater than...");
-
         Collection<TestObject> street = storage.get(
                 Filter.of("age", 20, FilterType.GREATER_THAN)
         ).join();
         assertEquals(13, street.size());
-
-        log.fine(" --- Filter greater than test passed!");
     }
 
     @Test
     public void testLessThan() {
-        log.fine(" --- Testing filter less than...");
-
         Collection<TestObject> street = storage.get(
                 Filter.of("age", 20, FilterType.LESS_THAN)
         ).join();
         assertEquals(2, street.size());
-
-        log.fine(" --- Filter less than test passed!");
     }
 
     @Test
     public void testContains() {
-        log.fine(" --- Testing filter contains...");
-
         Collection<TestObject> street = storage.get(
                 Filter.of("data.address", "Street", FilterType.CONTAINS),
                 Filter.of("age", 18, FilterType.EQUALS)
@@ -250,13 +231,10 @@ public class FStorageTests {
                 Filter.of("data.address", "Avenue", FilterType.CONTAINS, SortingType.NONE, Filter.Type.OR)
         );
         assertEquals(16, allStreets.join().size());
-        log.fine(" --- Filter contains test passed!");
     }
 
     @Test
     public void testEquals() {
-        log.fine(" --- Testing filter equals...");
-
         Collection<TestObject> usd = storage.get(
                 Filter.of("data.balance.currency", "USD", FilterType.EQUALS)
         ).join();

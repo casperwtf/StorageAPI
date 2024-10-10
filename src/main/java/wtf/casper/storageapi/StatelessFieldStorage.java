@@ -32,93 +32,24 @@ public interface StatelessFieldStorage<K, V> {
      * @param sortingType the sorting type to use.
      * @return a future that will complete with a collection of all values that match the given field and value.
      */
-    CompletableFuture<Collection<V>> get(final String field, final Object value, final FilterType filterType, final SortingType sortingType);
+    default CompletableFuture<Collection<V>> get(final String field, final Object value, final FilterType filterType, final SortingType sortingType) {
+        return get(Filter.of(field, value, filterType, sortingType));
+    };
 
     /**
      * @param filters the filters to use.
      * @return a future that will complete with a collection of all value that match the given filters.
      */
     default CompletableFuture<Collection<V>> get(Filter... filters) {
-        return CompletableFuture.supplyAsync(() -> {
-            Collection<V> values = new ArrayList<>();
-            List<List<Filter>> group = Filter.group(filters);
-
-            for (List<Filter> filterList : group) {
-                values.addAll(filterGroup(filterList));
-            }
-
-            values.removeIf(v -> Collections.frequency(values, v) > 1);
-            return values;
-        }, StorageAPIConstants.DB_THREAD_POOL);
-    }
-
-    default Collection<V> filterGroup(List<Filter> filters) {
-        Collection<V> values = new ArrayList<>();
-        if (filters == null || filters.isEmpty()) {
-            return values;
-        }
-        get(filters.get(0).key(), filters.get(0).value(), filters.get(0).filterType(), filters.get(0).sortingType()).thenAccept(values::addAll).join();
-        if (values.isEmpty()) {
-            return values;
-        }
-
-        if (filters.size() == 1) {
-            return values;
-        }
-
-        for (int i = 1; i < filters.size(); ) {
-            final int index = i;
-            values.removeIf((v) -> {
-                String[] allFields = filters.get(index).key().split("\\.");
-                if (allFields.length == 1) {
-                    return !filters.get(index).filterType().passes(v, filters.get(index).key(), filters.get(index).value());
-                }
-
-                Iterator<String> iterator = Arrays.stream(allFields).iterator();
-                Object object = v;
-                while (iterator.hasNext()) {
-                    String field = iterator.next();
-                    Optional<Object> optional = ReflectionUtil.getFieldValue(object, field);
-                    if (optional.isEmpty()) {
-                        return true;
-                    }
-                    object = optional.get();
-                    if (!iterator.hasNext()) {
-                        return !filters.get(index).filterType().passes(object, field, filters.get(index).value());
-                    }
-                }
-
-                return true;
-            });
-
-            i++;
-        }
-        return values;
-    }
+        return get(Integer.MAX_VALUE, filters);
+    };
 
     /**
      * @param limit   the limit of values to return.
      * @param filters the filters to use.
      * @return a future that will complete with a collection of all value that match the given filters.
      */
-    default CompletableFuture<Collection<V>> get(int limit, Filter... filters) {
-        if (filters == null || filters.length == 0) {
-            return CompletableFuture.completedFuture(Collections.emptyList());
-        }
-
-        if (limit <= 0) {
-            return get(filters);
-        }
-
-        return CompletableFuture.supplyAsync(() -> {
-            Collection<V> join = get(filters).join();
-            if (join.size() <= limit) {
-                return join;
-            }
-
-            return join.stream().limit(limit).toList();
-        }, StorageAPIConstants.DB_THREAD_POOL);
-    }
+    CompletableFuture<Collection<V>> get(int limit, Filter... filters);
 
     /**
      * @param key the key to search for.
@@ -191,7 +122,15 @@ public interface StatelessFieldStorage<K, V> {
      * @param filterType the filter type to use.
      * @return a future that will complete with the first value that matches the given field and value.
      */
-    CompletableFuture<V> getFirst(final String field, final Object value, FilterType filterType);
+    default CompletableFuture<V> getFirst(final String field, final Object value, FilterType filterType) {
+        return get(1, Filter.of(field, value, filterType, SortingType.NONE)).thenApply((values) -> {
+            if (values.isEmpty()) {
+                return null;
+            }
+
+            return values.iterator().next();
+        });
+    };
 
 
     /**
@@ -233,9 +172,7 @@ public interface StatelessFieldStorage<K, V> {
      * @param value the value to search for.
      * @return a future that will complete with a boolean that represents whether the storage contains a value that matches the given field and value.
      */
-    default CompletableFuture<Boolean> contains(final String field, final Object value) {
-        return CompletableFuture.supplyAsync(() -> getFirst(field, value).join() != null, StorageAPIConstants.DB_THREAD_POOL);
-    }
+    CompletableFuture<Boolean> contains(final String field, final Object value);
 
     /**
      * @param storage the storage to migrate from. The data will be copied from the given storage to this storage.
@@ -298,4 +235,18 @@ public interface StatelessFieldStorage<K, V> {
             return sortingType.sort(values, field);
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
+
+    /**
+     * Adds an index to the storage.
+     * @param field the field to add an index for.
+     * @return a future that will complete when the index has been added.
+     */
+    CompletableFuture<Void> addIndex(String field);
+
+    /**
+     * Removes an index from the storage.
+     * @param field the field to remove the index for.
+     * @return a future that will complete when the index has been removed.
+     */
+    CompletableFuture<Void> removeIndex(String field);
 }
