@@ -176,7 +176,7 @@ public class ReflectionUtil {
     }
 
     /**
-     * Get the generic type of class (e.g. List<String> -> String)
+     * Get the generic type of class (e.g. List of String -> String)
      *
      * @param field the field to get the generic type from
      * @param index the index of the generic type
