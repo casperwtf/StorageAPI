@@ -9,13 +9,11 @@ import lombok.Getter;
 import lombok.extern.java.Log;
 import org.bson.Document;
 import org.bson.conversions.Bson;
-import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.FieldStorage;
-import wtf.casper.storageapi.FilterType;
-import wtf.casper.storageapi.SortingType;
+import wtf.casper.storageapi.*;
 import wtf.casper.storageapi.cache.Cache;
 import wtf.casper.storageapi.cache.CaffeineCache;
 import wtf.casper.storageapi.id.utils.IdUtils;
+import wtf.casper.storageapi.impl.statelessfstorage.StatelessMongoFStorage;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.IMongoStorage;
 import wtf.casper.storageapi.misc.MongoProvider;
@@ -28,15 +26,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 @Log
-public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableValue<K, V>, IMongoStorage {
-
-    protected final Class<K> keyClass;
-    protected final Class<V> valueClass;
-    private final String idFieldName;
-    private final MongoClient mongoClient;
-    @Getter
-    private final MongoCollection<Document> collection;
-    private final ReplaceOptions replaceOptions = new ReplaceOptions().upsert(true);
+public abstract class MongoFStorage<K, V> extends StatelessMongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableValue<K, V>, IMongoStorage {
 
     private Cache<K, V> cache = new CaffeineCache<>(Caffeine.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build());
 
@@ -45,18 +35,7 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
     }
 
     public MongoFStorage(final String uri, final String database, final String collection, final Class<K> keyClass, final Class<V> valueClass) {
-        this.valueClass = valueClass;
-        this.keyClass = keyClass;
-        this.idFieldName = IdUtils.getIdName(this.valueClass);
-        try {
-            mongoClient = MongoProvider.getClient(uri);
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("Failed to connect to mongo");
-        }
-
-        MongoDatabase mongoDatabase = mongoClient.getDatabase(database);
-        this.collection = mongoDatabase.getCollection(collection);
+        super(uri, database, collection, keyClass, valueClass);
     }
 
     @Override
@@ -109,17 +88,9 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
             if (cache.getIfPresent(key) != null) {
                 return cache.getIfPresent(key);
             }
-
-            Document filter = new Document("_id", convertUUIDtoString(key));
-            Document document = getCollection().find(filter).first();
-
-            if (document == null) {
-                return null;
-            }
-
-            V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
-            cache.asMap().putIfAbsent(key, obj);
-            return obj;
+            V join = super.get(key).join();
+            cache.asMap().putIfAbsent(key, join);
+            return join;
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
@@ -134,16 +105,9 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
                 }
             }
 
-            Bson filter = getDocument(filterType, field, value);
-            Document document = getCollection().find(filter).first();
+            V obj = super.getFirst(field, value, filterType).join();
+            cache.asMap().putIfAbsent((K) IdUtils.getId(obj), obj);
 
-            if (document == null) {
-                return null;
-            }
-
-            V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
-            K key = (K) IdUtils.getId(valueClass, obj);
-            cache.asMap().putIfAbsent(key, obj);
             return obj;
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
@@ -153,31 +117,18 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
         return CompletableFuture.runAsync(() -> {
             K key = (K) IdUtils.getId(valueClass, value);
             cache.asMap().putIfAbsent(key, value);
-            Document document = Document.parse(StorageAPIConstants.getGson().toJson(value));
-            document.put("_id", convertUUIDtoString(key));
-            getCollection().replaceOne(
-                    new Document(idFieldName, convertUUIDtoString(key)),
-                    document,
-                    replaceOptions
-            );
+            super.save(value).join();
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Void> saveAll(Collection<V> values) {
         return CompletableFuture.runAsync(() -> {
-            // can this be bulk done?
             for (V value : values) {
                 K key = (K) IdUtils.getId(valueClass, value);
                 cache.asMap().putIfAbsent(key, value);
-                Document document = Document.parse(StorageAPIConstants.getGson().toJson(value));
-                document.put("_id", convertUUIDtoString(key));
-                getCollection().replaceOne(
-                        new Document(idFieldName, convertUUIDtoString(key)),
-                        document,
-                        replaceOptions
-                );
             }
+            super.saveAll(values).join();
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
@@ -202,8 +153,11 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
 
     @Override
     public CompletableFuture<Void> close() {
-        // No need to close mongo because it's handled by a provider
-        return CompletableFuture.completedFuture(null);
+        return CompletableFuture.supplyAsync(() -> {
+            cache.invalidateAll();
+            MongoProvider.closeClient();
+            return null;
+        }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override

@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.SneakyThrows;
 import org.jetbrains.annotations.Nullable;
 import wtf.casper.storageapi.FieldStorage;
+import wtf.casper.storageapi.Filter;
 import wtf.casper.storageapi.FilterType;
 import wtf.casper.storageapi.SortingType;
 import wtf.casper.storageapi.cache.Cache;
@@ -99,6 +100,25 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     }
 
     @Override
+    public CompletableFuture<Collection<V>> get(int limit, Filter... filters) {
+        return CompletableFuture.supplyAsync(() -> {
+            Collection<V> values = cache().asMap().values();
+            for (Filter filter : filters) {
+                values = filter(values, filter.key(), filter.value(), filter.filterType());
+            }
+            return values;
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> contains(String field, Object value) {
+        return CompletableFuture.supplyAsync(() -> {
+            Collection<V> values = cache().asMap().values();
+            return !filter(values, field, value, FilterType.EQUALS).isEmpty();
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
     public CompletableFuture<V> getFirst(String field, Object value, FilterType filterType) {
         return CompletableFuture.supplyAsync(() -> {
             Collection<V> values = cache().asMap().values();
@@ -143,6 +163,16 @@ public abstract class JsonFStorage<K, V> implements FieldStorage<K, V>, Construc
     @Override
     public CompletableFuture<Collection<V>> allValues() {
         return CompletableFuture.supplyAsync(() -> cache.asMap().values(), StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> addIndex(String field) {
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> removeIndex(String field) {
+        return CompletableFuture.completedFuture(null);
     }
 
     private Collection<V> filter(final Collection<V> values, final String field, final Object value, FilterType filterType) {

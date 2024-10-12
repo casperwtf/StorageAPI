@@ -164,7 +164,7 @@ public class FStorageTests {
             new TestObject(
                     UUID.fromString("00000000-0000-0000-0000-000000000001"), "Jane", 19,
                     new TestObjectData("1234 Fake Street", "Fake Employer B", "fakejanea@gmail.com", "123-456-7890",
-                            19, new TestObjectBalance(200, "USD")
+                            19, new TestObjectBalance(200, "GBP")
                     )
             )
     );
@@ -228,7 +228,9 @@ public class FStorageTests {
 
         CompletableFuture<Collection<TestObject>> allStreets = storage.get(
                 Filter.of("data.address", "Street", FilterType.CONTAINS),
-                Filter.of("data.address", "Avenue", FilterType.CONTAINS, SortingType.NONE, Filter.Type.OR)
+                Filter.of("data.address", "Avenue", FilterType.CONTAINS, SortingType.NONE, Filter.Type.OR),
+                Filter.of("data.address", "Random Garbage", FilterType.CONTAINS, SortingType.NONE, Filter.Type.OR)
+
         );
         assertEquals(16, allStreets.join().size());
     }
@@ -238,6 +240,96 @@ public class FStorageTests {
         Collection<TestObject> usd = storage.get(
                 Filter.of("data.balance.currency", "USD", FilterType.EQUALS)
         ).join();
-        assertEquals(16, usd.size());
+        assertEquals(15, usd.size());
     }
+
+    @Test
+    public void testNotEquals() {
+        Collection<TestObject> usd = storage.get(
+                Filter.of("data.balance.currency", "USD", FilterType.NOT_EQUALS)
+        ).join();
+        assertEquals(1, usd.size());
+    }
+
+    @Test
+    public void testNotContains() {
+        Collection<TestObject> street = storage.get(
+                Filter.of("data.address", "Street", FilterType.NOT_CONTAINS)
+        ).join();
+        assertEquals(8, street.size());
+    }
+
+    @Test
+    public void testNotStartsWith() {
+        Collection<TestObject> street = storage.get(
+                Filter.of("data.address", "1", FilterType.NOT_STARTS_WITH)
+        ).join();
+        assertEquals(12, street.size());
+    }
+
+    @Test
+    public void testNotEndsWith() {
+        Collection<TestObject> street = storage.get(
+                Filter.of("name", "a", FilterType.NOT_ENDS_WITH)
+        ).join();
+        assertEquals(11, street.size());
+    }
+
+    @Test
+    public void testLessThanOrEqualTo() {
+        Collection<TestObject> street = storage.get(
+                Filter.of("age", 20, FilterType.LESS_THAN_OR_EQUAL_TO)
+        ).join();
+        assertEquals(3, street.size());
+    }
+
+    @Test
+    public void testGreaterThanOrEqualTo() {
+        Collection<TestObject> street = storage.get(
+                Filter.of("age", 20, FilterType.GREATER_THAN_OR_EQUAL_TO)
+        ).join();
+        assertEquals(14, street.size());
+    }
+
+    @Test
+    public void testNotLessThan() {
+        Collection<TestObject> street = storage.get(
+                Filter.of("age", 20, FilterType.NOT_LESS_THAN)
+        ).join();
+        assertEquals(14, street.size());
+    }
+
+    @Test
+    public void testNotGreaterThan() {
+        Collection<TestObject> street = storage.get(
+                Filter.of("age", 20, FilterType.NOT_GREATER_THAN)
+        ).join();
+        assertEquals(3, street.size());
+    }
+
+    @Test
+    public void testNotLessThanOrEqualTo() {
+        Collection<TestObject> street = storage.get(
+                Filter.of("age", 20, FilterType.NOT_LESS_THAN_OR_EQUAL_TO)
+        ).join();
+        assertEquals(13, street.size());
+    }
+
+    @Test
+    public void testNotGreaterThanOrEqualTo() {
+        Collection<TestObject> street = storage.get(
+                Filter.of("age", 20, FilterType.NOT_GREATER_THAN_OR_EQUAL_TO)
+        ).join();
+        assertEquals(2, street.size());
+    }
+
+    @Test
+    public void testAnd() {
+        Collection<TestObject> street = storage.get(
+                Filter.of("age", 20, FilterType.GREATER_THAN),
+                Filter.of("data.address", "Street", FilterType.CONTAINS)
+        ).join();
+        assertEquals(6, street.size());
+    }
+
 }

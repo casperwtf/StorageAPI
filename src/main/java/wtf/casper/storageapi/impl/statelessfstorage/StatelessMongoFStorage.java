@@ -7,6 +7,7 @@ import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.ReplaceOptions;
 import lombok.Getter;
 import lombok.extern.java.Log;
+import org.bson.BsonArray;
 import org.bson.Document;
 import wtf.casper.storageapi.*;
 import wtf.casper.storageapi.id.utils.IdUtils;
@@ -21,15 +22,16 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @Log
-public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>, ConstructableValue<K, V>, IMongoStorage {
+public abstract class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>, ConstructableValue<K, V>, IMongoStorage {
 
-    private final Class<K> keyClass;
-    private final Class<V> valueClass;
-    private final String idFieldName;
-    private final MongoClient mongoClient;
+    protected final Class<K> keyClass;
+    protected final Class<V> valueClass;
+    protected final String idFieldName;
+    protected final MongoClient mongoClient;
+    protected final String uri;
     @Getter
-    private final MongoCollection<Document> collection;
-    private final ReplaceOptions replaceOptions = new ReplaceOptions().upsert(true);
+    protected final MongoCollection<Document> collection;
+    protected final ReplaceOptions replaceOptions = new ReplaceOptions().upsert(true);
 
     public StatelessMongoFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
         this(credentials.getUri(), credentials.getDatabase(), credentials.getCollection(), keyClass, valueClass);
@@ -45,6 +47,7 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             e.printStackTrace();
             throw new RuntimeException("Failed to connect to mongo");
         }
+        this.uri = uri;
 
         MongoDatabase mongoDatabase = mongoClient.getDatabase(database);
         this.collection = mongoDatabase.getCollection(collection);
@@ -68,13 +71,20 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             boolean hasOr = group.size() > 1;
 
             Document query = new Document();
+            List<Document> orConditions = new ArrayList<>();
+
             for (List<Filter> filterGroup : group) {
                 Document andQuery = andFilters(filterGroup.toArray(new Filter[0]));
+
                 if (hasOr) {
-                    query.append("$or", andQuery);
+                    orConditions.add(andQuery);
                 } else {
                     query = andQuery;
                 }
+            }
+
+            if (hasOr) {
+                query.append("$or", orConditions);
             }
 
             FindIterable<Document> iterable = collection.find(query);
@@ -106,6 +116,17 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
         return CompletableFuture.supplyAsync(() -> {
             Document document = Document.parse(StorageAPIConstants.getGson().toJson(value));
             collection.replaceOne(new Document(idFieldName, IdUtils.getId(valueClass, value)), document, replaceOptions);
+            return null;
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<Void> saveAll(Collection<V> values) {
+        return CompletableFuture.supplyAsync(() -> {
+            for (V value : values) {
+                Document document = Document.parse(StorageAPIConstants.getGson().toJson(value));
+                collection.replaceOne(new Document(idFieldName, IdUtils.getId(valueClass, value)), document, replaceOptions);
+            }
             return null;
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
@@ -177,13 +198,13 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             case STARTS_WITH -> {
                 return new Document(filter.key(), new Document("$regex", "^" + filter.value()).append("$options", "i"));
             }
-            case LESS_THAN -> {
+            case LESS_THAN, NOT_GREATER_THAN_OR_EQUAL_TO -> {
                 return new Document(filter.key(), new Document("$lt", filter.value()));
             }
             case EQUALS -> {
                 return new Document(filter.key(), filter.value());
             }
-            case GREATER_THAN -> {
+            case GREATER_THAN, NOT_LESS_THAN_OR_EQUAL_TO -> {
                 return new Document(filter.key(), new Document("$gt", filter.value()));
             }
             case CONTAINS -> {
@@ -192,10 +213,10 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             case ENDS_WITH -> {
                 return new Document(filter.key(), new Document("$regex", filter.value() + "$").append("$options", "i"));
             }
-            case LESS_THAN_OR_EQUAL_TO -> {
+            case LESS_THAN_OR_EQUAL_TO, NOT_GREATER_THAN -> {
                 return new Document(filter.key(), new Document("$lte", filter.value()));
             }
-            case GREATER_THAN_OR_EQUAL_TO -> {
+            case GREATER_THAN_OR_EQUAL_TO, NOT_LESS_THAN -> {
                 return new Document(filter.key(), new Document("$gte", filter.value()));
             }
             case NOT_EQUALS -> {
@@ -209,18 +230,6 @@ public class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>
             }
             case NOT_ENDS_WITH -> {
                 return new Document(filter.key(), new Document("$not", new Document("$regex", filter.value() + "$").append("$options", "i")));
-            }
-            case NOT_LESS_THAN -> {
-                return new Document(filter.key(), new Document("$not", new Document("$lt", filter.value())));
-            }
-            case NOT_GREATER_THAN -> {
-                return new Document(filter.key(), new Document("$not", new Document("$gt", filter.value())));
-            }
-            case NOT_LESS_THAN_OR_EQUAL_TO -> {
-                return new Document(filter.key(), new Document("$not", new Document("$lte", filter.value())));
-            }
-            case NOT_GREATER_THAN_OR_EQUAL_TO -> {
-                return new Document(filter.key(), new Document("$not", new Document("$gte", filter.value())));
             }
             default -> {
                 throw new IllegalArgumentException("Unknown filter type: " + filter.filterType());
