@@ -3,7 +3,8 @@ package wtf.casper.storageapi;
 import lombok.extern.java.Log;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import wtf.casper.storageapi.impl.direct.fstorage.*;
+import wtf.casper.storageapi.impl.direct.statelessfstorage.DirectStatelessMariaDBFStorage;
+import wtf.casper.storageapi.impl.direct.statelessfstorage.DirectStatelessMongoFStorage;
 
 import java.io.File;
 import java.io.InputStream;
@@ -13,14 +14,14 @@ import java.util.concurrent.CompletableFuture;
 import static org.junit.Assert.assertEquals;
 
 @Log
-public class FStorageTests {
+public class StatelessFStorageTests {
 
     @BeforeAll
     public static void setup() {
-        InputStream stream = FStorageTests.class.getClassLoader().getResourceAsStream("storage.properties");
+        InputStream stream = StatelessFStorageTests.class.getClassLoader().getResourceAsStream("storage.properties");
         File file = new File("."+File.separator+"storage.properties");
         if (file.exists()) {
-            stream = file.toURI().toASCIIString().contains("jar") ? FStorageTests.class.getClassLoader().getResourceAsStream("storage.properties") : null;
+            stream = file.toURI().toASCIIString().contains("jar") ? StatelessFStorageTests.class.getClassLoader().getResourceAsStream("storage.properties") : null;
         }
 
         if (stream == null) {
@@ -54,11 +55,11 @@ public class FStorageTests {
 
 
         switch (type) {
-            case MONGODB -> storage = new DirectMongoFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
+            case MONGODB -> storage = new DirectStatelessMongoFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case SQLITE -> throw new UnsupportedOperationException("SQLite is not supported yet!");
             case SQL -> throw new UnsupportedOperationException("SQL is not supported yet!");
-            case MARIADB -> throw new UnsupportedOperationException("MariaDB is not supported yet!");
-            case JSON -> storage = new DirectJsonFStorage<>(UUID.class, TestObject.class, new File("."+File.separator+"data.json"), TestObject::new);
+            case MARIADB -> storage = new DirectStatelessMariaDBFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
+            case JSON -> throw new UnsupportedOperationException("JSON is not supported yet!");
             default -> throw new IllegalStateException("Unexpected value: " + type);
         }
 
@@ -68,7 +69,7 @@ public class FStorageTests {
     }
 
     private static Credentials credentials;
-    private static FieldStorage<UUID, TestObject> storage;
+    private static StatelessFieldStorage<UUID, TestObject> storage;
 
     private static final List<TestObject> initialData = List.of(
             new TestObject(
@@ -331,5 +332,14 @@ public class FStorageTests {
         ).join();
         assertEquals(6, street.size());
     }
+
+    @Test
+    public void testLimit() {
+        Collection<TestObject> street = storage.get(10,
+                Filter.of("age", 20, FilterType.GREATER_THAN_OR_EQUAL_TO)
+        ).join();
+        assertEquals(10, street.size());
+    }
+
 
 }

@@ -49,23 +49,6 @@ public abstract class MongoFStorage<K, V> extends StatelessMongoFStorage<K, V> i
     }
 
     @Override
-    public Class<V> value() {
-        return valueClass;
-    }
-
-    @Override
-    public Class<K> key() {
-        return keyClass;
-    }
-
-    @Override
-    public CompletableFuture<Void> deleteAll() {
-        return CompletableFuture.runAsync(() -> {
-            getCollection().deleteMany(new Document());
-        }, StorageAPIConstants.DB_THREAD_POOL);
-    }
-
-    @Override
     public CompletableFuture<Collection<V>> get(String field, Object value, FilterType filterType, SortingType sortingType) {
         return CompletableFuture.supplyAsync(() -> {
 
@@ -146,32 +129,11 @@ public abstract class MongoFStorage<K, V> extends StatelessMongoFStorage<K, V> i
     }
 
     @Override
-    public CompletableFuture<Void> write() {
-        // No need to write to mongo
-        return CompletableFuture.completedFuture(null);
-    }
-
-    @Override
     public CompletableFuture<Void> close() {
         return CompletableFuture.supplyAsync(() -> {
             cache.invalidateAll();
-            MongoProvider.closeClient();
+            MongoProvider.closeClient(uri);
             return null;
-        }, StorageAPIConstants.DB_THREAD_POOL);
-    }
-
-    @Override
-    public CompletableFuture<Collection<V>> allValues() {
-        return CompletableFuture.supplyAsync(() -> {
-            List<Document> into = getCollection().find().into(new ArrayList<>());
-            List<V> collection = new ArrayList<>();
-
-            for (Document document : into) {
-                V obj = StorageAPIConstants.getGson().fromJson(document.toJson(StorageAPIConstants.getJsonWriterSettings()), valueClass);
-                collection.add(obj);
-            }
-
-            return collection;
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }
