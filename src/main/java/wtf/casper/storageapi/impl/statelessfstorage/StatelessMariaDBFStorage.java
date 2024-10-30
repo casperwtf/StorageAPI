@@ -2,6 +2,7 @@ package wtf.casper.storageapi.impl.statelessfstorage;
 
 import com.zaxxer.hikari.HikariDataSource;
 import org.intellij.lang.annotations.Language;
+import wtf.casper.storageapi.Credentials;
 import wtf.casper.storageapi.Filter;
 import wtf.casper.storageapi.FilterType;
 import wtf.casper.storageapi.StatelessFieldStorage;
@@ -13,6 +14,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, V>, ConstructableValue<K, V> {
@@ -22,7 +24,11 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
     private final HikariDataSource ds;
     private final String table;
 
-    public StatelessMariaDBFStorage( final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
+    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, Credentials credentials) {
+        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+    }
+
+    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.idFieldName = IdUtils.getIdName(this.valueClass);
@@ -69,6 +75,7 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
                 query.append(" LIMIT ").append(limit);
             }
 
+            System.out.println(query);
             try (Connection connection = ds.getConnection();
                  PreparedStatement stmt = connection.prepareStatement(query.toString())) {
                 int index = 1;
@@ -83,6 +90,7 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
                 e.printStackTrace();
             }
             return values;
+
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
@@ -110,7 +118,7 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
             String query = "REPLACE INTO " + table + " (" + idFieldName + ", data) VALUES (?, ?)";
             try (Connection connection = ds.getConnection();
                  PreparedStatement stmt = connection.prepareStatement(query)) {
-                stmt.setObject(1, IdUtils.getId(valueClass, value));
+                stmt.setObject(1, uuidToString(IdUtils.getId(valueClass, value)));
                 stmt.setString(2, StorageAPIConstants.getGson().toJson(value));
                 stmt.executeUpdate();
             } catch (SQLException e) {
@@ -126,7 +134,7 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
             String query = "DELETE FROM " + table + " WHERE " + idFieldName + " = ?";
             try (Connection connection = ds.getConnection();
                  PreparedStatement stmt = connection.prepareStatement(query)) {
-                stmt.setObject(1, IdUtils.getId(valueClass, key));
+                stmt.setObject(1, uuidToString(IdUtils.getId(valueClass, key)));
                 stmt.executeUpdate();
             } catch (SQLException e) {
                 e.printStackTrace();
@@ -217,7 +225,7 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
     private void createTable() {
         try (Connection connection = ds.getConnection();
              Statement stmt = connection.createStatement()) {
-            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + table + " (" + idFieldName + " VARCHAR NOT NULL PRIMARY KEY, data LONGTEXT)");
+            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + table + " (" + idFieldName + " VARCHAR(255) PRIMARY KEY, data TEXT)");
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -226,30 +234,30 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
     private String getSqlOperator(Filter filter) {
         switch (filter.filterType()) {
             case ENDS_WITH -> {
-                return "LIKE '%?'";
+                return "LIKE ?";
             }
             case NOT_ENDS_WITH -> {
-                return "NOT LIKE '%?'";
+                return "NOT LIKE ?";
             }
             case STARTS_WITH -> {
-                return "LIKE '?%'";
+                return "LIKE ?";
             }
             case NOT_STARTS_WITH -> {
-                return "NOT LIKE '?%'";
+                return "NOT LIKE CONCAT(? ,'%')";
             }
             case CONTAINS -> {
-                return "LIKE '%?%'";
+                return "LIKE CONCAT('%', ?, '%')";
             }
             case NOT_CONTAINS -> {
-                return "NOT LIKE '%?%'";
+                return "NOT LIKE CONCAT('%', ?, '%')";
             }
-            case LESS_THAN -> {
+            case LESS_THAN, NOT_GREATER_THAN_OR_EQUAL_TO -> {
                 return "< ?";
             }
             case EQUALS -> {
                 return "= ?";
             }
-            case GREATER_THAN -> {
+            case GREATER_THAN, NOT_LESS_THAN_OR_EQUAL_TO -> {
                 return "> ?";
             }
             case LESS_THAN_OR_EQUAL_TO, NOT_GREATER_THAN -> {
@@ -261,9 +269,15 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
             case NOT_EQUALS -> {
                 return "!= ?";
             }
-            default -> {
-                throw new IllegalArgumentException("Unknown filter type: " + filter.filterType());
-            }
+            default -> throw new IllegalArgumentException("Unknown filter type: " + filter.filterType());
+        }
+    }
+
+    private Object uuidToString(Object uuid) {
+        if (uuid instanceof UUID) {
+            return uuid.toString();
+        } else {
+            return uuid;
         }
     }
 }
