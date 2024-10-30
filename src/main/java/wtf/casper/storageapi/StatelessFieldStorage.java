@@ -41,7 +41,7 @@ public interface StatelessFieldStorage<K, V> {
      * @return a future that will complete with a collection of all value that match the given filters.
      */
     default CompletableFuture<Collection<V>> get(Filter... filters) {
-        return get(Integer.MAX_VALUE, filters);
+        return get(-1, filters);
     };
 
     /**
