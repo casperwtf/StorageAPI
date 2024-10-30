@@ -66,7 +66,7 @@ public abstract class StatelessMongoFStorage<K, V> implements StatelessFieldStor
     @Override
     public CompletableFuture<Collection<V>> get(int limit, Filter... filters) {
         return CompletableFuture.supplyAsync(() -> {
-            boolean hasLimit = limit != Integer.MAX_VALUE;
+            boolean hasLimit = limit > 0;
             List<List<Filter>> group = Filter.group(filters);
             boolean hasOr = group.size() > 1;
 
