@@ -16,6 +16,7 @@ import static org.junit.Assert.assertEquals;
 
 @Log
 //TODO: make stateless version of tests
+//TODO: move to https://java.testcontainers.org/
 public class KVStorageTests {
 
     @BeforeAll

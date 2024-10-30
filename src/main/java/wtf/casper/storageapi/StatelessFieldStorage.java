@@ -1,18 +1,14 @@
 package wtf.casper.storageapi;
 
-import dev.dejvokep.boostedyaml.YamlDocument;
-import dev.dejvokep.boostedyaml.block.implementation.Section;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.misc.KeyValue;
 import wtf.casper.storageapi.utils.ReflectionUtil;
 import wtf.casper.storageapi.utils.StorageAPIConstants;
 
-import java.io.IOException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.*;
+import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 
 public interface StatelessFieldStorage<K, V> {
 
@@ -180,37 +176,8 @@ public interface StatelessFieldStorage<K, V> {
      */
     default CompletableFuture<Boolean> migrate(final StatelessFieldStorage<K, V> storage) {
         return CompletableFuture.supplyAsync(() -> {
-            storage.allValues().thenAccept((values) -> values.forEach(v -> save(v).join())).join();
+            storage.allValues().thenAccept(this::saveAll).join();
             return true;
-        }, StorageAPIConstants.DB_THREAD_POOL);
-    }
-
-    /**
-     * @param oldStorageSupplier supplier to provide the old storage
-     * @param config             the config
-     * @param path               the path to the storage
-     * @return a future that will complete with a boolean that represents whether the migration was successful.
-     */
-    default CompletableFuture<Boolean> migrateFrom(Supplier<StatelessFieldStorage<K, V>> oldStorageSupplier, YamlDocument config, String path) {
-        return CompletableFuture.supplyAsync(() -> {
-            if (config == null) return false;
-            Section section = config.getSection(path);
-            if (section == null) return false;
-            if (!section.getBoolean("migrate", false)) return false;
-            section.set("migrate", false);
-            try {
-                config.save();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            // storage that we are migrating to the new storage
-            StatelessFieldStorage<K, V> oldStorage = oldStorageSupplier.get();
-            try {
-                this.migrate(oldStorage).join();
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
@@ -218,23 +185,6 @@ public interface StatelessFieldStorage<K, V> {
      * @return a future that will complete with a collection of all values in the storage.
      */
     CompletableFuture<Collection<V>> allValues();
-
-    /**
-     * @param field       the field to search for.
-     * @param sortingType the sorting type to use.
-     * @return a future that will complete with a collection of all values in the storage that match the given field and value.
-     */
-    default CompletableFuture<Collection<V>> allValues(String field, SortingType sortingType) {
-        return CompletableFuture.supplyAsync(() -> {
-            Collection<V> values = allValues().join();
-            if (values.isEmpty()) {
-                return values;
-            }
-
-            // Sort the values.
-            return sortingType.sort(values, field);
-        }, StorageAPIConstants.DB_THREAD_POOL);
-    }
 
     /**
      * Adds an index to the storage.
