@@ -31,15 +31,17 @@ public record Filter(String key, Object value, FilterType filterType, SortingTyp
         List<List<Filter>> groups = new ArrayList<>();
         groups.add(new ArrayList<>());
         for (Filter filter : filters) {
+            List<Filter> lastGroup = groups.get(groups.size() - 1);
             if (filter.type() == Type.AND) {
-                groups.get(groups.size() - 1).add(filter);
+                lastGroup.add(filter);
                 continue;
             }
 
-            if (!groups.get(groups.size() - 1).isEmpty()) {
+            if (!lastGroup.isEmpty()) {
                 groups.add(new ArrayList<>());
+                lastGroup = groups.get(groups.size() - 1);
             }
-            groups.get(groups.size() - 1).add(filter);
+            lastGroup.add(filter);
         }
 
         return groups;
