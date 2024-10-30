@@ -1,6 +1,7 @@
 package wtf.casper.storageapi.impl.statelessfstorage;
 
 import com.zaxxer.hikari.HikariDataSource;
+import lombok.extern.slf4j.Slf4j;
 import org.intellij.lang.annotations.Language;
 import wtf.casper.storageapi.Credentials;
 import wtf.casper.storageapi.Filter;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+@Slf4j
 public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, V>, ConstructableValue<K, V> {
     private final Class<K> keyClass;
     private final Class<V> valueClass;
@@ -25,7 +27,7 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
     private final String table;
 
     public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, Credentials credentials) {
-        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
+        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(-1), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
     public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
@@ -71,11 +73,10 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
 
             query.setLength(query.length() - 4); // Remove the last " OR "
 
-            if (limit != Integer.MAX_VALUE) {
+            if (limit > 0) {
                 query.append(" LIMIT ").append(limit);
             }
 
-            System.out.println(query);
             try (Connection connection = ds.getConnection();
                  PreparedStatement stmt = connection.prepareStatement(query.toString())) {
                 int index = 1;
@@ -234,16 +235,16 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
     private String getSqlOperator(Filter filter) {
         switch (filter.filterType()) {
             case ENDS_WITH -> {
-                return "LIKE ?";
+                return "LIKE CONCAT('\"%', ?, '\"')";
             }
             case NOT_ENDS_WITH -> {
-                return "NOT LIKE ?";
+                return "NOT LIKE CONCAT('\"%', ?, '\"')";
             }
             case STARTS_WITH -> {
-                return "LIKE ?";
+                return "LIKE CONCAT('\"', ?, '%\"')";
             }
             case NOT_STARTS_WITH -> {
-                return "NOT LIKE CONCAT(? ,'%')";
+                return "NOT LIKE CONCAT('\"', ?, '%\"')";
             }
             case CONTAINS -> {
                 return "LIKE CONCAT('%', ?, '%')";
