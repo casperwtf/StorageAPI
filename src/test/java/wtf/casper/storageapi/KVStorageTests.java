@@ -60,7 +60,7 @@ public class KVStorageTests {
         switch (type) {
             case MONGODB -> storage = new DirectMongoKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case SQLITE -> storage = new DirectSQLiteKVStorage<>(UUID.class, TestObject.class, new File("src/test/resources/data.db"), "data", TestObject::new);
-            case SQL -> storage = new DirectSQLKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
+            case MYSQL -> storage = new DirectSQLKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case MARIADB -> storage = new DirectMariaDBKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case JSON -> storage = new DirectJsonKVStorage<>(UUID.class, TestObject.class, new File("./src/test/resources/data"), TestObject::new);
             default -> throw new IllegalStateException("Unexpected value: " + type);
@@ -69,7 +69,7 @@ public class KVStorageTests {
         switch (type) {
             case MONGODB -> storageOther = new DirectMongoKVStorage<>(UUID.class, TestObjectOther.class, credentials, TestObjectOther::new);
             case SQLITE -> storageOther = new DirectSQLiteKVStorage<>(UUID.class, TestObjectOther.class, new File("src/test/resources/data.db"), "data", TestObjectOther::new);
-            case SQL -> storageOther = new DirectSQLKVStorage<>(UUID.class, TestObjectOther.class, credentials, TestObjectOther::new);
+            case MYSQL -> storageOther = new DirectSQLKVStorage<>(UUID.class, TestObjectOther.class, credentials, TestObjectOther::new);
             case MARIADB -> storageOther = new DirectMariaDBKVStorage<>(UUID.class, TestObjectOther.class, credentials, TestObjectOther::new);
             case JSON -> storageOther = new DirectJsonKVStorage<>(UUID.class, TestObjectOther.class, new File("./src/test/resources/data"), TestObjectOther::new);
             default -> throw new IllegalStateException("Unexpected value: " + type);

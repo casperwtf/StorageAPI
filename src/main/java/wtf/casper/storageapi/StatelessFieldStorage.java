@@ -45,7 +45,11 @@ public interface StatelessFieldStorage<K, V> {
      * @param filters the filters to use.
      * @return a future that will complete with a collection of all value that match the given filters.
      */
-    CompletableFuture<Collection<V>> get(int limit, Filter... filters);
+    default CompletableFuture<Collection<V>> get(int limit, Filter... filters) {
+        return get(0, limit, filters);
+    }
+
+    CompletableFuture<Collection<V>> get(int skip, int limit, Filter... filters);
 
     /**
      * @param key the key to search for.

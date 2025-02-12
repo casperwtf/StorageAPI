@@ -60,7 +60,7 @@ public class StatelessFStorageTests {
         switch (type) {
             case MONGODB -> storage = new DirectStatelessMongoFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case SQLITE -> throw new UnsupportedOperationException("SQLite is not supported yet!");
-            case SQL -> throw new UnsupportedOperationException("SQL is not supported yet!");
+            case MYSQL -> throw new UnsupportedOperationException("MySQL is not supported yet!");
             case MARIADB -> storage = new DirectStatelessMariaDBFStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case JSON -> throw new UnsupportedOperationException("JSON is not supported yet!");
             default -> throw new IllegalStateException("Unexpected value: " + type);
@@ -177,6 +177,12 @@ public class StatelessFStorageTests {
     @Test
     public void testTotalData() {
         assertEquals(initialData.size(), storage.allValues().join().size());
+    }
+
+    @Test
+    public void testTotalData2() {
+        Collection<TestObject> join = storage.get().join();
+        assertEquals(initialData.size(), join.size());
     }
 
     @Test

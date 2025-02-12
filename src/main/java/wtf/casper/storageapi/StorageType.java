@@ -15,7 +15,7 @@ package wtf.casper.storageapi;
  */
 public enum StorageType {
     JSON,
-    SQL,
+    MYSQL,
     MARIADB,
     SQLITE,
     MONGODB

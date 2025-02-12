@@ -3,10 +3,7 @@ package wtf.casper.storageapi.impl.statelessfstorage;
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.intellij.lang.annotations.Language;
-import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.Filter;
-import wtf.casper.storageapi.FilterType;
-import wtf.casper.storageapi.StatelessFieldStorage;
+import wtf.casper.storageapi.*;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
 import wtf.casper.storageapi.utils.StorageAPIConstants;
@@ -56,11 +53,16 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
     }
 
     @Override
-    public CompletableFuture<Collection<V>> get(int limit, Filter... filters) {
+    public CompletableFuture<Collection<V>> get(int skip, int limit, Filter... filters) {
         return CompletableFuture.supplyAsync(() -> {
-            List<V> values = new ArrayList<>();
-            StringBuilder query = new StringBuilder("SELECT * FROM ").append(table).append(" WHERE ");
+            if (filters.length == 0) {
+                return allValues().join();
+            }
 
+            List<V> values = new ArrayList<>();
+            StringBuilder query = new StringBuilder("SELECT * FROM ").append(table);
+
+            query.append(" WHERE ");
             List<List<Filter>> groups = Filter.group(filters);
             for (List<Filter> group : groups) {
                 query.append("(");
@@ -70,13 +72,23 @@ public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, 
                 query.setLength(query.length() - 5); // Remove the last " AND "
                 query.append(") OR ");
             }
-
             query.setLength(query.length() - 4); // Remove the last " OR "
+
+            if (skip > 0) {
+                query.append(" OFFSET ").append(skip);
+            }
 
             if (limit > 0) {
                 query.append(" LIMIT ").append(limit);
             }
 
+            Filter sortFilter = filters[0];
+            if (sortFilter != null && sortFilter.sortingType() == SortingType.ASCENDING) {
+                query.append(" ORDER BY JSON_EXTRACT(data, '$.").append(sortFilter.key()).append("') ASC");
+            } else if (sortFilter != null && sortFilter.sortingType() == SortingType.DESCENDING) {
+                query.append(" ORDER BY JSON_EXTRACT(data, '$.").append(sortFilter.key()).append("') DESC");
+            }
+            
             try (Connection connection = ds.getConnection();
                  PreparedStatement stmt = connection.prepareStatement(query.toString())) {
                 int index = 1;

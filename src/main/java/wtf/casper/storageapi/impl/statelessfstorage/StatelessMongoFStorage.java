@@ -64,8 +64,12 @@ public abstract class StatelessMongoFStorage<K, V> implements StatelessFieldStor
     }
 
     @Override
-    public CompletableFuture<Collection<V>> get(int limit, Filter... filters) {
+    public CompletableFuture<Collection<V>> get(int skip, int limit, Filter... filters) {
         return CompletableFuture.supplyAsync(() -> {
+            if (filters.length == 0) {
+                return allValues().join();
+            }
+
             boolean hasLimit = limit > 0;
             List<List<Filter>> group = Filter.group(filters);
             boolean hasOr = group.size() > 1;
@@ -90,6 +94,17 @@ public abstract class StatelessMongoFStorage<K, V> implements StatelessFieldStor
             FindIterable<Document> iterable = collection.find(query);
             if (hasLimit) {
                 iterable.limit(limit);
+            }
+
+            if (skip > 0) {
+                iterable.skip(skip);
+            }
+
+            Filter sortFilter = filters[0];
+            if (sortFilter != null && sortFilter.sortingType() == SortingType.ASCENDING) {
+                iterable.sort(new Document(sortFilter.key(), 1));
+            } else if (sortFilter != null && sortFilter.sortingType() == SortingType.DESCENDING) {
+                iterable.sort(new Document(sortFilter.key(), -1));
             }
 
             List<V> values = new ArrayList<>();
