@@ -11,7 +11,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-public interface StatelessKVStorage<K, V> {
+public interface KeyedStorage<K, V> {
 
     /**
      * @param key the key to search for.
@@ -115,7 +115,7 @@ public interface StatelessKVStorage<K, V> {
      * @param storage the storage to migrate from. The data will be copied from the given storage to this storage.
      * @return a future that will complete with a boolean that represents whether the migration was successful.
      */
-    default CompletableFuture<Boolean> migrate(final StatelessKVStorage<K, V> storage) {
+    default CompletableFuture<Boolean> migrate(final KeyedStorage<K, V> storage) {
         return CompletableFuture.supplyAsync(() -> {
             Collection<V> vs = storage.allValues().join();
             saveAll(vs).join(); // save all will batch if the implementation supports it (mongo for example)

@@ -2,7 +2,7 @@ package wtf.casper.storageapi.misc;
 
 import java.util.*;
 
-public interface IMongoStorage {
+public interface MongoStorage {
     default Object convertUUIDtoString(Object object) {
         if (object instanceof UUID) {
             return object.toString();

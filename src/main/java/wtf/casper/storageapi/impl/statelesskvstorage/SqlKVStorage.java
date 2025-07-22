@@ -4,7 +4,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.misc.ISQLKVStorage;
+import wtf.casper.storageapi.misc.SQLStorage;
 import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 import java.sql.ResultSet;
@@ -17,19 +17,19 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
 @Log
-public class StatelessSQLKVStorage<K, V> implements ISQLKVStorage<K, V> {
+public class SqlKVStorage<K, V> implements SQLStorage<K, V> {
 
     private final HikariDataSource ds;
     private final Class<K> keyClass;
     private final Class<V> valueClass;
     private final String table;
 
-    public StatelessSQLKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
+    public SqlKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
         this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
     @SneakyThrows
-    public StatelessSQLKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
+    public SqlKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;

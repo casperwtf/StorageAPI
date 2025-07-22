@@ -1,14 +1,12 @@
 package wtf.casper.storageapi;
 
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 import org.jetbrains.annotations.Nullable;
 
 @Getter
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
+@Builder
 public final class Credentials {
 
     private final StorageType type;
@@ -29,10 +27,6 @@ public final class Credentials {
     private String uri;
     @Nullable
     private Integer port;
-
-    public static Credentials of(final StorageType type, @Nullable final String host, @Nullable final String username, @Nullable final String password, @Nullable final String database, @Nullable String collection, @Nullable String table, @Nullable final String uri, final int port) {
-        return new Credentials(type, host, username, password, database, collection, table, uri, port);
-    }
 
     public StorageType getType(StorageType defaultValue) {
         return type == null ? defaultValue : type;

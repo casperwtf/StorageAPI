@@ -1,7 +1,7 @@
 package wtf.casper.storageapi.misc;
 
 import com.zaxxer.hikari.HikariDataSource;
-import wtf.casper.storageapi.StatelessKVStorage;
+import wtf.casper.storageapi.KeyedStorage;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.utils.StorageAPIConstants;
 import wtf.casper.storageapi.utils.UnsafeConsumer;
@@ -16,7 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
-public interface ISQLKVStorage<K, V> extends StatelessKVStorage<K, V>, ConstructableValue<K, V> {
+public interface SQLStorage<K, V> extends KeyedStorage<K, V>, ConstructableValue<K, V> {
 
     HikariDataSource dataSource();
 

@@ -2,7 +2,6 @@ package wtf.casper.storageapi.impl.statelessfstorage;
 
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
-import org.intellij.lang.annotations.Language;
 import wtf.casper.storageapi.*;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
@@ -16,18 +15,18 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
-public class StatelessMariaDBFStorage<K, V> implements StatelessFieldStorage<K, V>, ConstructableValue<K, V> {
+public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableValue<K, V> {
     private final Class<K> keyClass;
     private final Class<V> valueClass;
     private final String idFieldName;
     private final HikariDataSource ds;
     private final String table;
 
-    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, Credentials credentials) {
+    public MariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, Credentials credentials) {
         this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(-1), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
-    public StatelessMariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
+    public MariaDBFStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.idFieldName = IdUtils.getIdName(this.valueClass);

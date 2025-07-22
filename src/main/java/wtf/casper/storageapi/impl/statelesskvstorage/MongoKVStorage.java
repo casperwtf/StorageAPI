@@ -8,10 +8,9 @@ import lombok.Getter;
 import lombok.extern.java.Log;
 import org.bson.Document;
 import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.StatelessKVStorage;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
-import wtf.casper.storageapi.misc.IMongoStorage;
+import wtf.casper.storageapi.misc.MongoStorage;
 import wtf.casper.storageapi.misc.MongoProvider;
 import wtf.casper.storageapi.utils.StorageAPIConstants;
 
@@ -22,24 +21,24 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 @Log
-public class StatelessMongoKVStorage<K, V> implements StatelessKVStorage<K, V>, ConstructableValue<K, V>, IMongoStorage {
+public class MongoKVStorage<K, V> implements wtf.casper.storageapi.KeyedStorage<K, V>, ConstructableValue<K, V>, MongoStorage {
 
     private final Class<K> keyClass;
     private final Class<V> valueClass;
     private final String idFieldName;
-    private final MongoClient mongoClient;
     @Getter
     private final MongoCollection<Document> collection;
     private final ReplaceOptions replaceOptions = new ReplaceOptions().upsert(true);
 
-    public StatelessMongoKVStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
+    public MongoKVStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
         this(credentials.getUri(), credentials.getDatabase(), credentials.getCollection(), keyClass, valueClass);
     }
 
-    public StatelessMongoKVStorage(final String uri, final String database, final String collection, final Class<K> keyClass, final Class<V> valueClass) {
+    public MongoKVStorage(final String uri, final String database, final String collection, final Class<K> keyClass, final Class<V> valueClass) {
         this.valueClass = valueClass;
         this.keyClass = keyClass;
         this.idFieldName = IdUtils.getIdName(this.valueClass);
+        MongoClient mongoClient;
         try {
             mongoClient = MongoProvider.getClient(uri);
         } catch (Exception e) {

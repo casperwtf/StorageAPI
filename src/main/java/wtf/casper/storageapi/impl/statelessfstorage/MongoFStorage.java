@@ -12,7 +12,7 @@ import org.bson.Document;
 import wtf.casper.storageapi.*;
 import wtf.casper.storageapi.id.utils.IdUtils;
 import wtf.casper.storageapi.misc.ConstructableValue;
-import wtf.casper.storageapi.misc.IMongoStorage;
+import wtf.casper.storageapi.misc.MongoStorage;
 import wtf.casper.storageapi.misc.MongoProvider;
 import wtf.casper.storageapi.utils.StorageAPIConstants;
 
@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @Log
-public abstract class StatelessMongoFStorage<K, V> implements StatelessFieldStorage<K, V>, ConstructableValue<K, V>, IMongoStorage {
+public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableValue<K, V>, MongoStorage {
 
     protected final Class<K> keyClass;
     protected final Class<V> valueClass;
@@ -33,11 +33,11 @@ public abstract class StatelessMongoFStorage<K, V> implements StatelessFieldStor
     protected final MongoCollection<Document> collection;
     protected final ReplaceOptions replaceOptions = new ReplaceOptions().upsert(true);
 
-    public StatelessMongoFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
+    public MongoFStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
         this(credentials.getUri(), credentials.getDatabase(), credentials.getCollection(), keyClass, valueClass);
     }
 
-    public StatelessMongoFStorage(final String uri, final String database, final String collection, final Class<K> keyClass, final Class<V> valueClass) {
+    public MongoFStorage(final String uri, final String database, final String collection, final Class<K> keyClass, final Class<V> valueClass) {
         this.valueClass = valueClass;
         this.keyClass = keyClass;
         this.idFieldName = IdUtils.getIdName(this.valueClass);
