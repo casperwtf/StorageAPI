@@ -52,9 +52,9 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
     }
 
     @Override
-    public CompletableFuture<Collection<V>> get(int skip, int limit, Filter... filters) {
+    public CompletableFuture<Collection<V>> get(int skip, int limit, Condition... conditions) {
         return CompletableFuture.supplyAsync(() -> {
-            if (filters.length == 0) {
+            if (conditions.length == 0) {
                 return allValues().join();
             }
 
@@ -62,11 +62,11 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
             StringBuilder query = new StringBuilder("SELECT * FROM ").append(table);
 
             query.append(" WHERE ");
-            List<List<Filter>> groups = Filter.group(filters);
-            for (List<Filter> group : groups) {
+            List<List<Condition>> groups = Condition.group(conditions);
+            for (List<Condition> group : groups) {
                 query.append("(");
-                for (Filter filter : group) {
-                    query.append("JSON_EXTRACT(data, '$.").append(filter.key()).append("') ").append(getSqlOperator(filter)).append(" AND ");
+                for (Condition condition : group) {
+                    query.append("JSON_EXTRACT(data, '$.").append(condition.key()).append("') ").append(getSqlOperator(condition)).append(" AND ");
                 }
                 query.setLength(query.length() - 5); // Remove the last " AND "
                 query.append(") OR ");
@@ -81,18 +81,18 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
                 query.append(" LIMIT ").append(limit);
             }
 
-            Filter sortFilter = filters[0];
-            if (sortFilter != null && sortFilter.sortingType() == SortingType.ASCENDING) {
-                query.append(" ORDER BY JSON_EXTRACT(data, '$.").append(sortFilter.key()).append("') ASC");
-            } else if (sortFilter != null && sortFilter.sortingType() == SortingType.DESCENDING) {
-                query.append(" ORDER BY JSON_EXTRACT(data, '$.").append(sortFilter.key()).append("') DESC");
+            Condition sortCondition = conditions[0];
+            if (sortCondition != null && sortCondition.sortingType() == SortingType.ASCENDING) {
+                query.append(" ORDER BY JSON_EXTRACT(data, '$.").append(sortCondition.key()).append("') ASC");
+            } else if (sortCondition != null && sortCondition.sortingType() == SortingType.DESCENDING) {
+                query.append(" ORDER BY JSON_EXTRACT(data, '$.").append(sortCondition.key()).append("') DESC");
             }
             
             try (Connection connection = ds.getConnection();
                  PreparedStatement stmt = connection.prepareStatement(query.toString())) {
                 int index = 1;
-                for (Filter filter : filters) {
-                    stmt.setObject(index++, filter.value());
+                for (Condition condition : conditions) {
+                    stmt.setObject(index++, condition.value());
                 }
                 ResultSet rs = stmt.executeQuery();
                 while (rs.next()) {
@@ -243,8 +243,8 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
         }
     }
 
-    private String getSqlOperator(Filter filter) {
-        switch (filter.filterType()) {
+    private String getSqlOperator(Condition condition) {
+        switch (condition.conditionType()) {
             case ENDS_WITH -> {
                 return "LIKE CONCAT('\"%', ?, '\"')";
             }
@@ -281,7 +281,7 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
             case NOT_EQUALS -> {
                 return "!= ?";
             }
-            default -> throw new IllegalArgumentException("Unknown filter type: " + filter.filterType());
+            default -> throw new IllegalArgumentException("Unknown filter type: " + condition.conditionType());
         }
     }
 

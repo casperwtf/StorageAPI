@@ -54,8 +54,8 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <filters>
-                        <filter>
+                    <conditions>
+                        <condition>
                             <artifact>*:*</artifact>
                             <excludes>
                                 <exclude>META-INF/*.SF</exclude>
@@ -63,8 +63,8 @@
                                 <exclude>META-INF/*.RSA</exclude>
                                 <exclude>pom.xml</exclude>
                             </excludes>
-                        </filter>
-                    </filters>
+                        </condition>
+                    </conditions>
                     <relocations>
                         <relocation>
                             <pattern>com.zaxxer.hikari</pattern>

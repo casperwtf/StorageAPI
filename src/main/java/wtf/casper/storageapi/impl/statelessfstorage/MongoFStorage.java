@@ -64,21 +64,21 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
     }
 
     @Override
-    public CompletableFuture<Collection<V>> get(int skip, int limit, Filter... filters) {
+    public CompletableFuture<Collection<V>> get(int skip, int limit, Condition... conditions) {
         return CompletableFuture.supplyAsync(() -> {
-            if (filters.length == 0) {
+            if (conditions.length == 0) {
                 return allValues().join();
             }
 
             boolean hasLimit = limit > 0;
-            List<List<Filter>> group = Filter.group(filters);
+            List<List<Condition>> group = Condition.group(conditions);
             boolean hasOr = group.size() > 1;
 
             Document query = new Document();
             List<Document> orConditions = new ArrayList<>();
 
-            for (List<Filter> filterGroup : group) {
-                Document andQuery = andFilters(filterGroup.toArray(new Filter[0]));
+            for (List<Condition> conditionGroup : group) {
+                Document andQuery = andFilters(conditionGroup.toArray(new Condition[0]));
 
                 if (hasOr) {
                     orConditions.add(andQuery);
@@ -100,11 +100,11 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
                 iterable.skip(skip);
             }
 
-            Filter sortFilter = filters[0];
-            if (sortFilter != null && sortFilter.sortingType() == SortingType.ASCENDING) {
-                iterable.sort(new Document(sortFilter.key(), 1));
-            } else if (sortFilter != null && sortFilter.sortingType() == SortingType.DESCENDING) {
-                iterable.sort(new Document(sortFilter.key(), -1));
+            Condition sortCondition = conditions[0];
+            if (sortCondition != null && sortCondition.sortingType() == SortingType.ASCENDING) {
+                iterable.sort(new Document(sortCondition.key(), 1));
+            } else if (sortCondition != null && sortCondition.sortingType() == SortingType.DESCENDING) {
+                iterable.sort(new Document(sortCondition.key(), -1));
             }
 
             List<V> values = new ArrayList<>();
@@ -200,54 +200,54 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
-    private Document andFilters(Filter... filters) {
+    private Document andFilters(Condition... conditions) {
         Document query = new Document();
-        for (Filter filter : filters) {
-            query.putAll(filterToDocument(filter));
+        for (Condition condition : conditions) {
+            query.putAll(filterToDocument(condition));
         }
         return query;
     }
 
-    private Document filterToDocument(Filter filter) {
-        switch (filter.filterType()) {
+    private Document filterToDocument(Condition condition) {
+        switch (condition.conditionType()) {
             case STARTS_WITH -> {
-                return new Document(filter.key(), new Document("$regex", "^" + filter.value()).append("$options", "i"));
+                return new Document(condition.key(), new Document("$regex", "^" + condition.value()).append("$options", "i"));
             }
             case LESS_THAN, NOT_GREATER_THAN_OR_EQUAL_TO -> {
-                return new Document(filter.key(), new Document("$lt", filter.value()));
+                return new Document(condition.key(), new Document("$lt", condition.value()));
             }
             case EQUALS -> {
-                return new Document(filter.key(), filter.value());
+                return new Document(condition.key(), condition.value());
             }
             case GREATER_THAN, NOT_LESS_THAN_OR_EQUAL_TO -> {
-                return new Document(filter.key(), new Document("$gt", filter.value()));
+                return new Document(condition.key(), new Document("$gt", condition.value()));
             }
             case CONTAINS -> {
-                return new Document(filter.key(), new Document("$regex", filter.value()).append("$options", "i"));
+                return new Document(condition.key(), new Document("$regex", condition.value()).append("$options", "i"));
             }
             case ENDS_WITH -> {
-                return new Document(filter.key(), new Document("$regex", filter.value() + "$").append("$options", "i"));
+                return new Document(condition.key(), new Document("$regex", condition.value() + "$").append("$options", "i"));
             }
             case LESS_THAN_OR_EQUAL_TO, NOT_GREATER_THAN -> {
-                return new Document(filter.key(), new Document("$lte", filter.value()));
+                return new Document(condition.key(), new Document("$lte", condition.value()));
             }
             case GREATER_THAN_OR_EQUAL_TO, NOT_LESS_THAN -> {
-                return new Document(filter.key(), new Document("$gte", filter.value()));
+                return new Document(condition.key(), new Document("$gte", condition.value()));
             }
             case NOT_EQUALS -> {
-                return new Document(filter.key(), new Document("$ne", filter.value()));
+                return new Document(condition.key(), new Document("$ne", condition.value()));
             }
             case NOT_CONTAINS -> {
-                return new Document(filter.key(), new Document("$not", new Document("$regex", filter.value()).append("$options", "i")));
+                return new Document(condition.key(), new Document("$not", new Document("$regex", condition.value()).append("$options", "i")));
             }
             case NOT_STARTS_WITH -> {
-                return new Document(filter.key(), new Document("$not", new Document("$regex", "^" + filter.value()).append("$options", "i")));
+                return new Document(condition.key(), new Document("$not", new Document("$regex", "^" + condition.value()).append("$options", "i")));
             }
             case NOT_ENDS_WITH -> {
-                return new Document(filter.key(), new Document("$not", new Document("$regex", filter.value() + "$").append("$options", "i")));
+                return new Document(condition.key(), new Document("$not", new Document("$regex", condition.value() + "$").append("$options", "i")));
             }
             default -> {
-                throw new IllegalArgumentException("Unknown filter type: " + filter.filterType());
+                throw new IllegalArgumentException("Unknown filter type: " + condition.conditionType());
             }
         }
     }

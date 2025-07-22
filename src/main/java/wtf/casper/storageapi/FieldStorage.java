@@ -13,38 +13,38 @@ public interface FieldStorage<K, V> {
      * @return a future that will complete with a collection of all values that match the given field and value.
      */
     default CompletableFuture<Collection<V>> get(final String field, final Object value) {
-        return get(field, value, FilterType.EQUALS, SortingType.NONE);
+        return get(field, value, ConditionType.EQUALS, SortingType.NONE);
     }
 
     /**
      * @param field       the field to search for.
      * @param value       the value to search for.
-     * @param filterType  the filter type to use.
+     * @param conditionType  the filter type to use.
      * @param sortingType the sorting type to use.
      * @return a future that will complete with a collection of all values that match the given field and value.
      */
-    default CompletableFuture<Collection<V>> get(final String field, final Object value, final FilterType filterType, final SortingType sortingType) {
-        return get(Filter.of(field, value, filterType, sortingType));
-    };
+    default CompletableFuture<Collection<V>> get(final String field, final Object value, final ConditionType conditionType, final SortingType sortingType) {
+        return get(Condition.of(field, value, conditionType, sortingType));
+    }
 
     /**
-     * @param filters the filters to use.
+     * @param conditions the filters to use.
      * @return a future that will complete with a collection of all value that match the given filters.
      */
-    default CompletableFuture<Collection<V>> get(Filter... filters) {
-        return get(-1, filters);
+    default CompletableFuture<Collection<V>> get(Condition... conditions) {
+        return get(-1, conditions);
     };
 
     /**
      * @param limit   the limit of values to return.
-     * @param filters the filters to use.
+     * @param conditions the filters to use.
      * @return a future that will complete with a collection of all value that match the given filters.
      */
-    default CompletableFuture<Collection<V>> get(int limit, Filter... filters) {
-        return get(0, limit, filters);
+    default CompletableFuture<Collection<V>> get(int limit, Condition... conditions) {
+        return get(0, limit, conditions);
     }
 
-    CompletableFuture<Collection<V>> get(int skip, int limit, Filter... filters);
+    CompletableFuture<Collection<V>> get(int skip, int limit, Condition... conditions);
 
     /**
      * @param key the key to search for.
@@ -59,17 +59,17 @@ public interface FieldStorage<K, V> {
      * @return a future that will complete with the first value that matches the given field and value.
      */
     default CompletableFuture<V> getFirst(final String field, final Object value) {
-        return getFirst(field, value, FilterType.EQUALS);
+        return getFirst(field, value, ConditionType.EQUALS);
     }
 
     /**
      * @param field      the field to search for.
      * @param value      the value to search for.
-     * @param filterType the filter type to use.
+     * @param conditionType the filter type to use.
      * @return a future that will complete with the first value that matches the given field and value.
      */
-    default CompletableFuture<V> getFirst(final String field, final Object value, FilterType filterType) {
-        return get(1, Filter.of(field, value, filterType, SortingType.NONE)).thenApply((values) -> {
+    default CompletableFuture<V> getFirst(final String field, final Object value, ConditionType conditionType) {
+        return get(1, Condition.of(field, value, conditionType, SortingType.NONE)).thenApply((values) -> {
             if (values.isEmpty()) {
                 return null;
             }

@@ -188,7 +188,7 @@ public class FieldStorageTests {
     @Test
     public void testStartsWith() {
         Collection<TestObject> street = storage.get(
-                Filter.of("data.address", "1", FilterType.STARTS_WITH)
+                Condition.of("data.address", "1", ConditionType.STARTS_WITH)
         ).join();
         assertEquals(4, street.size());
     }
@@ -197,12 +197,12 @@ public class FieldStorageTests {
     public void testEndsWith() {
 
         Collection<TestObject> street = storage.get(
-                Filter.of("name", "a", FilterType.ENDS_WITH)
+                Condition.of("name", "a", ConditionType.ENDS_WITH)
         ).join();
         assertEquals(5, street.size());
 
         Collection<TestObject> phone = storage.get(
-                Filter.of("data.phone", "0", FilterType.ENDS_WITH)
+                Condition.of("data.phone", "0", ConditionType.ENDS_WITH)
         ).join();
         assertEquals(4, phone.size());
     }
@@ -210,7 +210,7 @@ public class FieldStorageTests {
     @Test
     public void testGreaterThan() {
         Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.GREATER_THAN)
+                Condition.of("age", 20, ConditionType.GREATER_THAN)
         ).join();
         assertEquals(13, street.size());
     }
@@ -218,7 +218,7 @@ public class FieldStorageTests {
     @Test
     public void testLessThan() {
         Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.LESS_THAN)
+                Condition.of("age", 20, ConditionType.LESS_THAN)
         ).join();
         assertEquals(2, street.size());
     }
@@ -226,20 +226,20 @@ public class FieldStorageTests {
     @Test
     public void testContains() {
         Collection<TestObject> street = storage.get(
-                Filter.of("data.address", "Street", FilterType.CONTAINS),
-                Filter.of("age", 18, FilterType.EQUALS)
+                Condition.of("data.address", "Street", ConditionType.CONTAINS),
+                Condition.of("age", 18, ConditionType.EQUALS)
         ).join();
         assertEquals(1, street.size());
 
         Collection<TestObject> street1 = storage.get(
-                Filter.of("data.address", "Street", FilterType.CONTAINS)
+                Condition.of("data.address", "Street", ConditionType.CONTAINS)
         ).join();
         assertEquals(8, street1.size());
 
         CompletableFuture<Collection<TestObject>> allStreets = storage.get(
-                Filter.of("data.address", "Street", FilterType.CONTAINS),
-                Filter.of("data.address", "Avenue", FilterType.CONTAINS, SortingType.NONE, Filter.Type.OR),
-                Filter.of("data.address", "Random Garbage", FilterType.CONTAINS, SortingType.NONE, Filter.Type.OR)
+                Condition.of("data.address", "Street", ConditionType.CONTAINS),
+                Condition.of("data.address", "Avenue", ConditionType.CONTAINS, SortingType.NONE, Condition.Type.OR),
+                Condition.of("data.address", "Random Garbage", ConditionType.CONTAINS, SortingType.NONE, Condition.Type.OR)
 
         );
         assertEquals(16, allStreets.join().size());
@@ -248,7 +248,7 @@ public class FieldStorageTests {
     @Test
     public void testEquals() {
         Collection<TestObject> usd = storage.get(
-                Filter.of("data.balance.currency", "USD", FilterType.EQUALS)
+                Condition.of("data.balance.currency", "USD", ConditionType.EQUALS)
         ).join();
         assertEquals(15, usd.size());
     }
@@ -256,7 +256,7 @@ public class FieldStorageTests {
     @Test
     public void testNotEquals() {
         Collection<TestObject> usd = storage.get(
-                Filter.of("data.balance.currency", "USD", FilterType.NOT_EQUALS)
+                Condition.of("data.balance.currency", "USD", ConditionType.NOT_EQUALS)
         ).join();
         assertEquals(1, usd.size());
     }
@@ -264,7 +264,7 @@ public class FieldStorageTests {
     @Test
     public void testNotContains() {
         Collection<TestObject> street = storage.get(
-                Filter.of("data.address", "Street", FilterType.NOT_CONTAINS)
+                Condition.of("data.address", "Street", ConditionType.NOT_CONTAINS)
         ).join();
         assertEquals(8, street.size());
     }
@@ -272,7 +272,7 @@ public class FieldStorageTests {
     @Test
     public void testNotStartsWith() {
         Collection<TestObject> street = storage.get(
-                Filter.of("data.address", "1", FilterType.NOT_STARTS_WITH)
+                Condition.of("data.address", "1", ConditionType.NOT_STARTS_WITH)
         ).join();
         assertEquals(12, street.size());
     }
@@ -280,7 +280,7 @@ public class FieldStorageTests {
     @Test
     public void testNotEndsWith() {
         Collection<TestObject> street = storage.get(
-                Filter.of("name", "a", FilterType.NOT_ENDS_WITH)
+                Condition.of("name", "a", ConditionType.NOT_ENDS_WITH)
         ).join();
         assertEquals(11, street.size());
     }
@@ -288,7 +288,7 @@ public class FieldStorageTests {
     @Test
     public void testLessThanOrEqualTo() {
         Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.LESS_THAN_OR_EQUAL_TO)
+                Condition.of("age", 20, ConditionType.LESS_THAN_OR_EQUAL_TO)
         ).join();
         assertEquals(3, street.size());
     }
@@ -296,7 +296,7 @@ public class FieldStorageTests {
     @Test
     public void testGreaterThanOrEqualTo() {
         Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.GREATER_THAN_OR_EQUAL_TO)
+                Condition.of("age", 20, ConditionType.GREATER_THAN_OR_EQUAL_TO)
         ).join();
         assertEquals(14, street.size());
     }
@@ -304,7 +304,7 @@ public class FieldStorageTests {
     @Test
     public void testNotLessThan() {
         Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.NOT_LESS_THAN)
+                Condition.of("age", 20, ConditionType.NOT_LESS_THAN)
         ).join();
         assertEquals(14, street.size());
     }
@@ -312,7 +312,7 @@ public class FieldStorageTests {
     @Test
     public void testNotGreaterThan() {
         Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.NOT_GREATER_THAN)
+                Condition.of("age", 20, ConditionType.NOT_GREATER_THAN)
         ).join();
         assertEquals(3, street.size());
     }
@@ -320,7 +320,7 @@ public class FieldStorageTests {
     @Test
     public void testNotLessThanOrEqualTo() {
         Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.NOT_LESS_THAN_OR_EQUAL_TO)
+                Condition.of("age", 20, ConditionType.NOT_LESS_THAN_OR_EQUAL_TO)
         ).join();
         assertEquals(13, street.size());
     }
@@ -328,7 +328,7 @@ public class FieldStorageTests {
     @Test
     public void testNotGreaterThanOrEqualTo() {
         Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.NOT_GREATER_THAN_OR_EQUAL_TO)
+                Condition.of("age", 20, ConditionType.NOT_GREATER_THAN_OR_EQUAL_TO)
         ).join();
         assertEquals(2, street.size());
     }
@@ -336,8 +336,8 @@ public class FieldStorageTests {
     @Test
     public void testAnd() {
         Collection<TestObject> street = storage.get(
-                Filter.of("age", 20, FilterType.GREATER_THAN),
-                Filter.of("data.address", "Street", FilterType.CONTAINS)
+                Condition.of("age", 20, ConditionType.GREATER_THAN),
+                Condition.of("data.address", "Street", ConditionType.CONTAINS)
         ).join();
         assertEquals(6, street.size());
     }
@@ -345,7 +345,7 @@ public class FieldStorageTests {
     @Test
     public void testLimit() {
         Collection<TestObject> street = storage.get(10,
-                Filter.of("age", 20, FilterType.GREATER_THAN_OR_EQUAL_TO)
+                Condition.of("age", 20, ConditionType.GREATER_THAN_OR_EQUAL_TO)
         ).join();
         assertEquals(10, street.size());
     }
