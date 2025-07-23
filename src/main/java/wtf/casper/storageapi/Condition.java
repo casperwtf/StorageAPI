@@ -8,6 +8,10 @@ public record Condition(String key, Object value, ConditionType conditionType, T
         return new Condition(key, value, conditionType, type);
     }
 
+    public static Condition of(String key, Object value, ConditionType conditionType) {
+        return new Condition(key, value, conditionType, Type.AND);
+    }
+
     public static Condition and(String key, Object value, ConditionType conditionType) {
         return new Condition(key, value, conditionType, Type.AND);
     }

@@ -52,6 +52,25 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
     }
 
     @Override
+    public CompletableFuture<Collection<V>> get() {
+        return CompletableFuture.supplyAsync(() -> {
+            List<V> values = new ArrayList<>();
+            String query = "SELECT * FROM " + table;
+            try (Connection connection = ds.getConnection();
+                 PreparedStatement stmt = connection.prepareStatement(query)) {
+                ResultSet rs = stmt.executeQuery();
+                while (rs.next()) {
+                    values.add(StorageAPIConstants.getGson().fromJson(rs.getString("data"), valueClass));
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
+            return values;
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
     public CompletableFuture<Collection<V>> get(Query query) {
         return CompletableFuture.supplyAsync(() -> {
             List<V> values = new ArrayList<>();

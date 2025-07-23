@@ -8,6 +8,8 @@ import java.util.concurrent.CompletableFuture;
 
 public interface FieldStorage<K, V> {
 
+    CompletableFuture<Collection<V>> get();
+
     /**
      * @param query The query to execute
      * @return a future that will complete with a collection of all values that match the given field and value.

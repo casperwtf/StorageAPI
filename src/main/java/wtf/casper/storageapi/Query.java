@@ -9,9 +9,9 @@ import java.util.List;
 @Getter
 @Accessors(fluent = true)
 public class Query {
-    private List<Condition> conditions = List.of();
-    private List<Sort> sorts = List.of();
-    private List<Aggregation> aggregations = List.of();
+    private final List<Condition> conditions = new ArrayList<>();
+    private final List<Sort> sorts = new ArrayList<>();
+    private final List<Aggregation> aggregations = new ArrayList<>();
     private boolean distinct = false;
     private int limit = -1;
     private int offset = 0;
@@ -20,21 +20,18 @@ public class Query {
         return new Query();
     }
 
-    public Query condition(Condition... conditions) {
-        conditions = conditions == null ? new Condition[0] : conditions;
-        this.conditions = new ArrayList<>(List.of(conditions));
+    public Query condition(Condition conditions) {
+        this.conditions.add(conditions);
         return this;
     }
 
-    public Query sort(Sort... sorts) {
-        sorts = sorts == null ? new Sort[0] : sorts;
-        this.sorts = new ArrayList<>(List.of(sorts));
+    public Query sort(Sort sorts) {
+        this.sorts.add(sorts);
         return this;
     }
 
-    public Query aggregation(Aggregation... aggregations) {
-        aggregations = aggregations == null ? new Aggregation[0] : aggregations;
-        this.aggregations = new ArrayList<>(List.of(aggregations));
+    public Query aggregation(Aggregation aggregations) {
+        this.aggregations.add(aggregations);
         return this;
     }
 

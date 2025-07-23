@@ -3,8 +3,8 @@ package wtf.casper.storageapi;
 import lombok.extern.java.Log;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import wtf.casper.storageapi.impl.direct.statelessfstorage.DirectMariaDBFStorage;
-import wtf.casper.storageapi.impl.direct.statelessfstorage.DirectMongoFStorage;
+import wtf.casper.storageapi.impl.direct.fstorage.DirectMariaDBFStorage;
+import wtf.casper.storageapi.impl.direct.fstorage.DirectMongoFStorage;
 
 import java.io.File;
 import java.io.InputStream;
@@ -44,17 +44,17 @@ public class FieldStorageTests {
 
     public static void init(Properties properties) {
         StorageType type = StorageType.valueOf((String) properties.get("storage.type"));
-        credentials = Credentials.of(
-                type,
-                (String) properties.get("storage.host"),
-                (String) properties.get("storage.username"),
-                (String) properties.get("storage.password"),
-                (String) properties.get("storage.database"),
-                (String) properties.get("storage.collection"),
-                (String) properties.get("storage.table"),
-                (String) properties.get("storage.uri"),
-                Integer.parseInt((String) properties.get("storage.port"))
-        );
+        credentials = Credentials.builder()
+                .type(type)
+                .host((String) properties.get("storage.host"))
+                .username((String) properties.get("storage.username"))
+                .password((String) properties.get("storage.password"))
+                .database((String) properties.get("storage.database"))
+                .collection((String) properties.get("storage.collection"))
+                .table((String) properties.get("storage.table"))
+                .uri((String) properties.get("storage.uri"))
+                .port(Integer.parseInt((String) properties.get("storage.port")))
+                .build();
 
 
         switch (type) {
@@ -187,168 +187,165 @@ public class FieldStorageTests {
 
     @Test
     public void testStartsWith() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("data.address", "1", ConditionType.STARTS_WITH)
-        ).join();
+        Query query = Query.of().condition(Condition.of("data.address", "1", ConditionType.STARTS_WITH));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(4, street.size());
     }
 
     @Test
     public void testEndsWith() {
-
-        Collection<TestObject> street = storage.get(
-                Condition.of("name", "a", ConditionType.ENDS_WITH)
-        ).join();
+        Query query = Query.of().condition(Condition.of("name", "a", ConditionType.ENDS_WITH));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(5, street.size());
 
-        Collection<TestObject> phone = storage.get(
-                Condition.of("data.phone", "0", ConditionType.ENDS_WITH)
-        ).join();
+        Query query1 = Query.of().condition(Condition.of("data.phone", "0", ConditionType.ENDS_WITH));
+        Collection<TestObject> phone = storage.get(query1).join();
         assertEquals(4, phone.size());
     }
 
     @Test
     public void testGreaterThan() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("age", 20, ConditionType.GREATER_THAN)
-        ).join();
+        Query query = Query.of().condition(Condition.of("age", 20, ConditionType.GREATER_THAN));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(13, street.size());
     }
 
     @Test
     public void testLessThan() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("age", 20, ConditionType.LESS_THAN)
-        ).join();
+        Query query = Query.of().condition(Condition.of("age", 20, ConditionType.LESS_THAN));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(2, street.size());
     }
 
     @Test
     public void testContains() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("data.address", "Street", ConditionType.CONTAINS),
-                Condition.of("age", 18, ConditionType.EQUALS)
-        ).join();
+        Query query1 = Query.of()
+                .condition(Condition.of("data.address", "Street", ConditionType.CONTAINS))
+                .condition(Condition.of("age", 18, ConditionType.EQUALS));
+        Collection<TestObject> street = storage.get(query1).join();
         assertEquals(1, street.size());
 
-        Collection<TestObject> street1 = storage.get(
-                Condition.of("data.address", "Street", ConditionType.CONTAINS)
-        ).join();
+        Query query2 = Query.of()
+                .condition(Condition.of("data.address", "Street", ConditionType.CONTAINS));
+        Collection<TestObject> street1 = storage.get(query2).join();
         assertEquals(8, street1.size());
 
-        CompletableFuture<Collection<TestObject>> allStreets = storage.get(
-                Condition.of("data.address", "Street", ConditionType.CONTAINS),
-                Condition.of("data.address", "Avenue", ConditionType.CONTAINS, SortingType.NONE, Condition.Type.OR),
-                Condition.of("data.address", "Random Garbage", ConditionType.CONTAINS, SortingType.NONE, Condition.Type.OR)
+        Query query3 = Query.of()
+                .condition(Condition.of("data.address", "Street", ConditionType.CONTAINS))
+                .condition(Condition.or("data.address", "Avenue", ConditionType.CONTAINS))
+                .condition(Condition.or("data.address", "Random Garbage", ConditionType.CONTAINS))
+                .offset(0)
+                .limit(20)
+                .distinct(false);
 
-        );
-        assertEquals(16, allStreets.join().size());
+        Collection<TestObject> allStreets = storage.get(query3).join();
+        assertEquals(16, allStreets.size());
     }
 
     @Test
     public void testEquals() {
-        Collection<TestObject> usd = storage.get(
-                Condition.of("data.balance.currency", "USD", ConditionType.EQUALS)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("data.balance.currency", "USD", ConditionType.EQUALS));
+        Collection<TestObject> usd = storage.get(query).join();
         assertEquals(15, usd.size());
     }
 
     @Test
     public void testNotEquals() {
-        Collection<TestObject> usd = storage.get(
-                Condition.of("data.balance.currency", "USD", ConditionType.NOT_EQUALS)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("data.balance.currency", "USD", ConditionType.NOT_EQUALS));
+        Collection<TestObject> usd = storage.get(query).join();
         assertEquals(1, usd.size());
     }
 
     @Test
     public void testNotContains() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("data.address", "Street", ConditionType.NOT_CONTAINS)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("data.address", "Street", ConditionType.NOT_CONTAINS));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(8, street.size());
     }
 
     @Test
     public void testNotStartsWith() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("data.address", "1", ConditionType.NOT_STARTS_WITH)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("data.address", "1", ConditionType.NOT_STARTS_WITH));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(12, street.size());
     }
 
     @Test
     public void testNotEndsWith() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("name", "a", ConditionType.NOT_ENDS_WITH)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("name", "a", ConditionType.NOT_ENDS_WITH));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(11, street.size());
     }
 
     @Test
     public void testLessThanOrEqualTo() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("age", 20, ConditionType.LESS_THAN_OR_EQUAL_TO)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("age", 20, ConditionType.LESS_THAN_OR_EQUAL_TO));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(3, street.size());
     }
 
     @Test
     public void testGreaterThanOrEqualTo() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("age", 20, ConditionType.GREATER_THAN_OR_EQUAL_TO)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("age", 20, ConditionType.GREATER_THAN_OR_EQUAL_TO));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(14, street.size());
     }
 
     @Test
     public void testNotLessThan() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("age", 20, ConditionType.NOT_LESS_THAN)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("age", 20, ConditionType.NOT_LESS_THAN));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(14, street.size());
     }
 
     @Test
     public void testNotGreaterThan() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("age", 20, ConditionType.NOT_GREATER_THAN)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("age", 20, ConditionType.NOT_GREATER_THAN));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(3, street.size());
     }
 
     @Test
     public void testNotLessThanOrEqualTo() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("age", 20, ConditionType.NOT_LESS_THAN_OR_EQUAL_TO)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("age", 20, ConditionType.NOT_LESS_THAN_OR_EQUAL_TO));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(13, street.size());
     }
 
     @Test
     public void testNotGreaterThanOrEqualTo() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("age", 20, ConditionType.NOT_GREATER_THAN_OR_EQUAL_TO)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("age", 20, ConditionType.NOT_GREATER_THAN_OR_EQUAL_TO));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(2, street.size());
     }
 
     @Test
     public void testAnd() {
-        Collection<TestObject> street = storage.get(
-                Condition.of("age", 20, ConditionType.GREATER_THAN),
-                Condition.of("data.address", "Street", ConditionType.CONTAINS)
-        ).join();
+        Query query = Query.of()
+                .condition(Condition.of("age", 20, ConditionType.GREATER_THAN))
+                .condition(Condition.of("data.address", "Street", ConditionType.CONTAINS));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(6, street.size());
     }
 
     @Test
     public void testLimit() {
-        Collection<TestObject> street = storage.get(10,
-                Condition.of("age", 20, ConditionType.GREATER_THAN_OR_EQUAL_TO)
-        ).join();
+        Query query = Query.of()
+                .limit(10)
+                .condition(Condition.of("age", 20, ConditionType.GREATER_THAN_OR_EQUAL_TO));
+        Collection<TestObject> street = storage.get(query).join();
         assertEquals(10, street.size());
     }
-
 
 }

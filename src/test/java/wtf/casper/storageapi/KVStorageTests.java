@@ -3,7 +3,9 @@ package wtf.casper.storageapi;
 import lombok.extern.java.Log;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import wtf.casper.storageapi.impl.direct.kvstorage.*;
+import wtf.casper.storageapi.impl.direct.kvstorage.DirectMariaDBKVStorage;
+import wtf.casper.storageapi.impl.direct.kvstorage.DirectMongoKVStorage;
+import wtf.casper.storageapi.impl.direct.kvstorage.DirectSQLKVStorage;
 
 import java.io.File;
 import java.io.InputStream;
@@ -44,34 +46,30 @@ public class KVStorageTests {
 
     public static void init(Properties properties) {
         StorageType type = StorageType.valueOf((String) properties.get("storage.type"));
-        credentials = Credentials.of(
-                type,
-                (String) properties.get("storage.host"),
-                (String) properties.get("storage.username"),
-                (String) properties.get("storage.password"),
-                (String) properties.get("storage.database"),
-                (String) properties.get("storage.collection"),
-                (String) properties.get("storage.table"),
-                (String) properties.get("storage.uri"),
-                Integer.parseInt((String) properties.get("storage.port"))
-        );
+        credentials = Credentials.builder()
+                .type(type)
+                .host((String) properties.get("storage.host"))
+                .username((String) properties.get("storage.username"))
+                .password((String) properties.get("storage.password"))
+                .database((String) properties.get("storage.database"))
+                .collection((String) properties.get("storage.collection"))
+                .table((String) properties.get("storage.table"))
+                .uri((String) properties.get("storage.uri"))
+                .port(Integer.parseInt((String) properties.get("storage.port")))
+                .build();
 
 
         switch (type) {
             case MONGODB -> storage = new DirectMongoKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
-            case SQLITE -> storage = new DirectSQLiteKVStorage<>(UUID.class, TestObject.class, new File("src/test/resources/data.db"), "data", TestObject::new);
             case MYSQL -> storage = new DirectSQLKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
             case MARIADB -> storage = new DirectMariaDBKVStorage<>(UUID.class, TestObject.class, credentials, TestObject::new);
-            case JSON -> storage = new DirectJsonKVStorage<>(UUID.class, TestObject.class, new File("./src/test/resources/data"), TestObject::new);
             default -> throw new IllegalStateException("Unexpected value: " + type);
         }
 
         switch (type) {
             case MONGODB -> storageOther = new DirectMongoKVStorage<>(UUID.class, TestObjectOther.class, credentials, TestObjectOther::new);
-            case SQLITE -> storageOther = new DirectSQLiteKVStorage<>(UUID.class, TestObjectOther.class, new File("src/test/resources/data.db"), "data", TestObjectOther::new);
             case MYSQL -> storageOther = new DirectSQLKVStorage<>(UUID.class, TestObjectOther.class, credentials, TestObjectOther::new);
             case MARIADB -> storageOther = new DirectMariaDBKVStorage<>(UUID.class, TestObjectOther.class, credentials, TestObjectOther::new);
-            case JSON -> storageOther = new DirectJsonKVStorage<>(UUID.class, TestObjectOther.class, new File("./src/test/resources/data"), TestObjectOther::new);
             default -> throw new IllegalStateException("Unexpected value: " + type);
         }
 
@@ -81,8 +79,8 @@ public class KVStorageTests {
     }
 
     private static Credentials credentials;
-    private static KVStorage<UUID, TestObject> storage;
-    private static KVStorage<UUID, TestObjectOther> storageOther;
+    private static KeyedStorage<UUID, TestObject> storage;
+    private static KeyedStorage<UUID, TestObjectOther> storageOther;
 
     private static final List<TestObject> initialData = List.of(
             new TestObject(

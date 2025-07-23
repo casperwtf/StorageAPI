@@ -1,4 +1,4 @@
-package wtf.casper.storageapi.impl.direct.statelesskvstorage;
+package wtf.casper.storageapi.impl.direct.kvstorage;
 
 import wtf.casper.storageapi.Credentials;
 import wtf.casper.storageapi.impl.kvstorage.SQLKVStorage;
@@ -6,12 +6,12 @@ import wtf.casper.storageapi.misc.ConstructableValue;
 
 import java.util.function.Function;
 
-public class DirectStatelessSQLStorage<K, V> extends SQL<K, V> implements ConstructableValue<K, V> {
+public class DirectSQLKVStorage<K, V> extends SQLKVStorage<K, V> implements ConstructableValue<K, V> {
 
     private final Function<K, V> function;
 
-    public DirectStatelessSQLStorage(Class<K> keyClass, Class<V> valueClass, Credentials credentials, Function<K, V> function) {
-        super(keyClass, valueClass, credentials.getTable(), credentials);
+    public DirectSQLKVStorage(Class<K> keyClass, Class<V> valueClass, Credentials credentials, Function<K, V> function) {
+        super(keyClass, valueClass, credentials);
         this.function = function;
     }
 

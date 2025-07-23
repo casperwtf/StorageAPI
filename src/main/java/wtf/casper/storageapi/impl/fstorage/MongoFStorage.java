@@ -65,6 +65,18 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
     }
 
     @Override
+    public CompletableFuture<Collection<V>> get() {
+        return CompletableFuture.supplyAsync(() -> {
+            List<V> values = new ArrayList<>();
+            FindIterable<Document> iterable = collection.find();
+            for (Document document : iterable) {
+                values.add(StorageAPIConstants.getGson().fromJson(document.toJson(), valueClass));
+            }
+            return values;
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
     public CompletableFuture<Collection<V>> get(Query query) {
         return CompletableFuture.supplyAsync(() -> {
             boolean hasLimit = query.limit() > 0;
@@ -97,7 +109,8 @@ public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableVal
                 iterable.skip(query.offset());
             }
 
-            Sort sort = query.sorts().get(0);
+
+            Sort sort = query.sorts().isEmpty() ? null : query.sorts().get(0);
             if (sort != null && sort.sortingType() == SortingType.ASCENDING) {
                 iterable.sort(new Document(sort.field(), 1));
             } else if (sort != null && sort.sortingType() == SortingType.DESCENDING) {
