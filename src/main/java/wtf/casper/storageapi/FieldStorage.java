@@ -3,81 +3,29 @@ package wtf.casper.storageapi;
 import wtf.casper.storageapi.utils.StorageAPIConstants;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface FieldStorage<K, V> {
 
     /**
-     * @param field the field to search for.
-     * @param value the value to search for.
+     * @param query The query to execute
      * @return a future that will complete with a collection of all values that match the given field and value.
      */
-    default CompletableFuture<Collection<V>> get(final String field, final Object value) {
-        return get(field, value, ConditionType.EQUALS, SortingType.NONE);
-    }
+    CompletableFuture<Collection<V>> get(Query query);
 
     /**
-     * @param field       the field to search for.
-     * @param value       the value to search for.
-     * @param conditionType  the filter type to use.
-     * @param sortingType the sorting type to use.
-     * @return a future that will complete with a collection of all values that match the given field and value.
+     * @param query The query to remove
      */
-    default CompletableFuture<Collection<V>> get(final String field, final Object value, final ConditionType conditionType, final SortingType sortingType) {
-        return get(Condition.of(field, value, conditionType, sortingType));
-    }
+    CompletableFuture<Void> remove(final Query query);
 
     /**
-     * @param conditions the filters to use.
-     * @return a future that will complete with a collection of all value that match the given filters.
+     * Executes an aggregation query on the storage and returns the result as a CompletableFuture.
+     *
+     * @param query The query containing aggregation details, such as the fields, functions, and filters to apply.
+     * @return A CompletableFuture that completes with the result of the aggregation query as an AggregationResult object.
      */
-    default CompletableFuture<Collection<V>> get(Condition... conditions) {
-        return get(-1, conditions);
-    };
-
-    /**
-     * @param limit   the limit of values to return.
-     * @param conditions the filters to use.
-     * @return a future that will complete with a collection of all value that match the given filters.
-     */
-    default CompletableFuture<Collection<V>> get(int limit, Condition... conditions) {
-        return get(0, limit, conditions);
-    }
-
-    CompletableFuture<Collection<V>> get(int skip, int limit, Condition... conditions);
-
-    /**
-     * @param key the key to search for.
-     * @return a future that will complete with the value that matches the given key.
-     * The value may be null if the key is not found.
-     */
-    CompletableFuture<V> get(final K key);
-
-    /**
-     * @param field the field to search for.
-     * @param value the value to search for.
-     * @return a future that will complete with the first value that matches the given field and value.
-     */
-    default CompletableFuture<V> getFirst(final String field, final Object value) {
-        return getFirst(field, value, ConditionType.EQUALS);
-    }
-
-    /**
-     * @param field      the field to search for.
-     * @param value      the value to search for.
-     * @param conditionType the filter type to use.
-     * @return a future that will complete with the first value that matches the given field and value.
-     */
-    default CompletableFuture<V> getFirst(final String field, final Object value, ConditionType conditionType) {
-        return get(1, Condition.of(field, value, conditionType, SortingType.NONE)).thenApply((values) -> {
-            if (values.isEmpty()) {
-                return null;
-            }
-
-            return values.iterator().next();
-        });
-    };
-
+    CompletableFuture<List<AggregationResult>> aggregate(final Query query);
 
     /**
      * @param value the value to save.
@@ -88,13 +36,9 @@ public interface FieldStorage<K, V> {
      * @param values the values to save.
      */
     default CompletableFuture<Void> saveAll(final Collection<V> values) {
+        // designed to be naive approach that is overridden for batched impls
         return CompletableFuture.runAsync(() -> values.forEach(v -> save(v).join()), StorageAPIConstants.DB_THREAD_POOL);
     }
-
-    /**
-     * @param key the key to remove.
-     */
-    CompletableFuture<Void> remove(final V key);
 
     /**
      * Writes the storage to disk.
@@ -112,13 +56,6 @@ public interface FieldStorage<K, V> {
     default CompletableFuture<Void> close() {
         return CompletableFuture.completedFuture(null);
     }
-
-    /**
-     * @param field the field to search for.
-     * @param value the value to search for.
-     * @return a future that will complete with a boolean that represents whether the storage contains a value that matches the given field and value.
-     */
-    CompletableFuture<Boolean> contains(final String field, final Object value);
 
     /**
      * @param storage the storage to migrate from. The data will be copied from the given storage to this storage.
@@ -141,12 +78,12 @@ public interface FieldStorage<K, V> {
      * @param field the field to add an index for.
      * @return a future that will complete when the index has been added.
      */
-    CompletableFuture<Void> addIndex(String field);
+    CompletableFuture<Void> index(String field);
 
     /**
      * Removes an index from the storage.
      * @param field the field to remove the index for.
      * @return a future that will complete when the index has been removed.
      */
-    CompletableFuture<Void> removeIndex(String field);
+    CompletableFuture<Void> unindex(String field);
 }

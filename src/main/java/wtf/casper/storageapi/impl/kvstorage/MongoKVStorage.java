@@ -1,4 +1,4 @@
-package wtf.casper.storageapi.impl.statelesskvstorage;
+package wtf.casper.storageapi.impl.kvstorage;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;

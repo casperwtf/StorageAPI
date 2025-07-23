@@ -1,4 +1,4 @@
-package wtf.casper.storageapi.impl.statelesskvstorage;
+package wtf.casper.storageapi.impl.kvstorage;
 
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.SneakyThrows;
@@ -17,32 +17,31 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
 @Log
-public class MariaDBKVStorage<K, V> implements SQLStorage<K, V> {
+public class SqlKVStorage<K, V> implements SQLStorage<K, V> {
+
     private final HikariDataSource ds;
     private final Class<K> keyClass;
     private final Class<V> valueClass;
     private final String table;
 
-    public MariaDBKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
+    public SqlKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final Credentials credentials) {
         this(keyClass, valueClass, table, credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
     }
 
-    public MariaDBKVStorage(final Class<K> keyClass, final Class<V> valueClass, final Credentials credentials) {
-        this(keyClass, valueClass, credentials.getTable(), credentials.getHost(), credentials.getPort(3306), credentials.getDatabase(), credentials.getUsername(), credentials.getPassword());
-    }
-
     @SneakyThrows
-    public MariaDBKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
+    public SqlKVStorage(final Class<K> keyClass, final Class<V> valueClass, final String table, final String host, final int port, final String database, final String username, final String password) {
         this.keyClass = keyClass;
         this.valueClass = valueClass;
         this.table = table;
         this.ds = new HikariDataSource();
         this.ds.setMaximumPoolSize(20);
-        this.ds.setDriverClassName("org.mariadb.jdbc.Driver");
-        this.ds.setJdbcUrl("jdbc:mariadb://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&autoReconnect=true&useSSL=false");
+        this.ds.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        this.ds.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&autoReconnect=true&useSSL=false");
         this.ds.addDataSourceProperty("user", username);
         this.ds.addDataSourceProperty("password", password);
-        this.ds.setAutoCommit(true);
+        this.ds.setConnectionTimeout(300000);
+        this.ds.setConnectionTimeout(120000);
+        this.ds.setLeakDetectionThreshold(300000);
         createTable();
     }
 
@@ -117,18 +116,16 @@ public class MariaDBKVStorage<K, V> implements SQLStorage<K, V> {
     @Override
     public CompletableFuture<Void> renameField(String path, String newPath) {
         return CompletableFuture.runAsync(() -> {
-            execute("UPDATE " + this.table + " SET data = JSON_SET(data, '$." + newPath + "', JSON_EXTRACT(data, '$." + path + "'));");
+            execute("ALTER TABLE " + this.table + " CHANGE " + path + " " + newPath + " TEXT;");
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
     public CompletableFuture<Void> renameFields(Map<String, String> pathToNewPath) {
         return CompletableFuture.runAsync(() -> {
-            pathToNewPath.forEach((path, newPath) -> {
-                this.execute("UPDATE " + this.table + " SET data = JSON_SET(data, '$." + newPath + "', JSON_EXTRACT(data, '$." + path + "'))," +
-                        " data = JSON_REMOVE(data, '$." + path + "')", statement -> {
-                });
-            });
+            for (Map.Entry<String, String> entry : pathToNewPath.entrySet()) {
+                execute("ALTER TABLE " + this.table + " CHANGE " + entry.getKey() + " " + entry.getValue() + " TEXT;");
+            }
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 }

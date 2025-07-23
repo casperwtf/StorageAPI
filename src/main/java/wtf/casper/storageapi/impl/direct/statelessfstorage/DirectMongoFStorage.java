@@ -1,7 +1,7 @@
 package wtf.casper.storageapi.impl.direct.statelessfstorage;
 
 import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.impl.statelessfstorage.MongoFStorage;
+import wtf.casper.storageapi.impl.fstorage.MongoFStorage;
 import wtf.casper.storageapi.misc.ConstructableValue;
 
 import java.util.function.Function;

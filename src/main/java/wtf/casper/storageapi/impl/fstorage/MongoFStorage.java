@@ -1,10 +1,11 @@
-package wtf.casper.storageapi.impl.statelessfstorage;
+package wtf.casper.storageapi.impl.fstorage;
 
 
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.DeleteOptions;
 import com.mongodb.client.model.ReplaceOptions;
 import lombok.Getter;
 import lombok.extern.java.Log;
@@ -22,7 +23,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @Log
-public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableValue<K, V>, MongoStorage {
+public class MongoFStorage<K, V> implements FieldStorage<K, V>, ConstructableValue<K, V>, MongoStorage {
 
     protected final Class<K> keyClass;
     protected final Class<V> valueClass;
@@ -64,17 +65,13 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
     }
 
     @Override
-    public CompletableFuture<Collection<V>> get(int skip, int limit, Condition... conditions) {
+    public CompletableFuture<Collection<V>> get(Query query) {
         return CompletableFuture.supplyAsync(() -> {
-            if (conditions.length == 0) {
-                return allValues().join();
-            }
-
-            boolean hasLimit = limit > 0;
-            List<List<Condition>> group = Condition.group(conditions);
+            boolean hasLimit = query.limit() > 0;
+            List<List<Condition>> group = Condition.group(query.conditions().toArray(new Condition[0]));
             boolean hasOr = group.size() > 1;
 
-            Document query = new Document();
+            Document queryDocument = new Document();
             List<Document> orConditions = new ArrayList<>();
 
             for (List<Condition> conditionGroup : group) {
@@ -83,28 +80,28 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
                 if (hasOr) {
                     orConditions.add(andQuery);
                 } else {
-                    query = andQuery;
+                    queryDocument = andQuery;
                 }
             }
 
             if (hasOr) {
-                query.append("$or", orConditions);
+                queryDocument.append("$or", orConditions);
             }
 
-            FindIterable<Document> iterable = collection.find(query);
+            FindIterable<Document> iterable = collection.find(queryDocument);
             if (hasLimit) {
-                iterable.limit(limit);
+                iterable.limit(query.limit());
             }
 
-            if (skip > 0) {
-                iterable.skip(skip);
+            if (query.offset() > 0) {
+                iterable.skip(query.offset());
             }
 
-            Condition sortCondition = conditions[0];
-            if (sortCondition != null && sortCondition.sortingType() == SortingType.ASCENDING) {
-                iterable.sort(new Document(sortCondition.key(), 1));
-            } else if (sortCondition != null && sortCondition.sortingType() == SortingType.DESCENDING) {
-                iterable.sort(new Document(sortCondition.key(), -1));
+            Sort sort = query.sorts().get(0);
+            if (sort != null && sort.sortingType() == SortingType.ASCENDING) {
+                iterable.sort(new Document(sort.field(), 1));
+            } else if (sort != null && sort.sortingType() == SortingType.DESCENDING) {
+                iterable.sort(new Document(sort.field(), -1));
             }
 
             List<V> values = new ArrayList<>();
@@ -116,13 +113,60 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
     }
 
     @Override
-    public CompletableFuture<V> get(K key) {
-        return CompletableFuture.supplyAsync(() -> {
-            Document document = collection.find(new Document(idFieldName, IdUtils.getId(valueClass, key))).first();
-            if (document == null) {
-                return null;
+    public CompletableFuture<Void> remove(Query query) {
+        return CompletableFuture.runAsync(() -> {
+            boolean hasLimit = query.limit() > 0;
+            List<List<Condition>> group = Condition.group(query.conditions().toArray(new Condition[0]));
+            boolean hasOr = group.size() > 1;
+
+            Document queryDocument = new Document();
+            List<Document> orConditions = new ArrayList<>();
+
+            for (List<Condition> conditionGroup : group) {
+                Document andQuery = andFilters(conditionGroup.toArray(new Condition[0]));
+
+                if (hasOr) {
+                    orConditions.add(andQuery);
+                } else {
+                    queryDocument = andQuery;
+                }
             }
-            return StorageAPIConstants.getGson().fromJson(document.toJson(), valueClass);
+
+            if (hasOr) {
+                queryDocument.append("$or", orConditions);
+            }
+
+            boolean hasOffset = query.offset() > 0;
+            if (hasLimit || hasOffset) {
+                List<Document> documents = new ArrayList<>();
+                collection.find(queryDocument)
+                        .limit(query.limit() == -1 ? 0 : query.limit() + query.offset())
+                        .skip(query.offset())
+                        .into(documents);
+                collection.deleteMany(new Document("$or", documents));
+                return;
+            }
+
+            collection.deleteMany(queryDocument);
+        }, StorageAPIConstants.DB_THREAD_POOL);
+
+    }
+
+    @Override
+    public CompletableFuture<List<AggregationResult>> aggregate(Query query) {
+        return CompletableFuture.supplyAsync(() -> {
+            List<AggregationResult> results = new ArrayList<>();
+            Document queryDocument = andFilters(query.conditions().toArray(new Condition[0]));
+            Document aggregationDocument = new Document();
+            for (Aggregation aggregation : query.aggregations()) {
+                aggregationDocument.append(aggregation.field(), aggregation(aggregation));
+            }
+
+            for (Document document : collection.aggregate(List.of(queryDocument, aggregationDocument))) {
+                results.add(new AggregationResult(document.getString(idFieldName), document.getDouble(aggregationDocument.keySet().iterator().next())));
+            }
+
+            return results;
         }, StorageAPIConstants.DB_THREAD_POOL);
     }
 
@@ -147,14 +191,6 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
     }
 
     @Override
-    public CompletableFuture<Void> remove(V key) {
-        return CompletableFuture.supplyAsync(() -> {
-            collection.deleteOne(new Document(idFieldName, IdUtils.getId(valueClass, key)));
-            return null;
-        }, StorageAPIConstants.DB_THREAD_POOL);
-    }
-
-    @Override
     public CompletableFuture<Void> write() {
         return CompletableFuture.completedFuture(null);
     }
@@ -165,11 +201,6 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
             collection.deleteMany(new Document());
             return null;
         }, StorageAPIConstants.DB_THREAD_POOL);
-    }
-
-    @Override
-    public CompletableFuture<Boolean> contains(String field, Object value) {
-        return CompletableFuture.supplyAsync(() -> collection.find(new Document(field, value)).first() != null, StorageAPIConstants.DB_THREAD_POOL);
     }
 
     @Override
@@ -185,7 +216,7 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
     }
 
     @Override
-    public CompletableFuture<Void> addIndex(String field) {
+    public CompletableFuture<Void> index(String field) {
         return CompletableFuture.supplyAsync(() -> {
             collection.createIndex(new Document(field, 1));
             return null;
@@ -193,7 +224,7 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
     }
 
     @Override
-    public CompletableFuture<Void> removeIndex(String field) {
+    public CompletableFuture<Void> unindex(String field) {
         return CompletableFuture.supplyAsync(() -> {
             collection.dropIndex(field);
             return null;
@@ -248,6 +279,29 @@ public abstract class MongoFStorage<K, V> implements FieldStorage<K, V>, Constru
             }
             default -> {
                 throw new IllegalArgumentException("Unknown filter type: " + condition.conditionType());
+            }
+        }
+    }
+
+    private Document aggregation(Aggregation aggregation) {
+        switch (aggregation.function()) {
+            case AVG -> {
+                return new Document("$avg", "$" + aggregation.field());
+            }
+            case COUNT -> {
+                return new Document("$count", aggregation.field());
+            }
+            case MAX -> {
+                return new Document("$max", "$" + aggregation.field());
+            }
+            case MIN -> {
+                return new Document("$min", "$" + aggregation.field());
+            }
+            case SUM -> {
+                return new Document("$sum", "$" + aggregation.field());
+            }
+            default -> {
+                throw new IllegalArgumentException("Unknown aggregation function: " + aggregation.function());
             }
         }
     }

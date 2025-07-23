@@ -1,4 +1,4 @@
-package wtf.casper.storageapi.impl.statelessfstorage;
+package wtf.casper.storageapi.impl.fstorage;
 
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
@@ -52,46 +52,44 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
     }
 
     @Override
-    public CompletableFuture<Collection<V>> get(int skip, int limit, Condition... conditions) {
+    public CompletableFuture<Collection<V>> get(Query query) {
         return CompletableFuture.supplyAsync(() -> {
-            if (conditions.length == 0) {
-                return allValues().join();
-            }
-
             List<V> values = new ArrayList<>();
-            StringBuilder query = new StringBuilder("SELECT * FROM ").append(table);
+            StringBuilder builder = new StringBuilder("SELECT * FROM ").append(table);
 
-            query.append(" WHERE ");
-            List<List<Condition>> groups = Condition.group(conditions);
-            for (List<Condition> group : groups) {
-                query.append("(");
-                for (Condition condition : group) {
-                    query.append("JSON_EXTRACT(data, '$.").append(condition.key()).append("') ").append(getSqlOperator(condition)).append(" AND ");
+            if (!query.conditions().isEmpty()) {
+                builder.append(" WHERE ");
+                List<List<Condition>> groups = Condition.group(query.conditions().toArray(new Condition[0]));
+                for (List<Condition> group : groups) {
+                    builder.append("(");
+                    for (Condition condition : group) {
+                        builder.append("JSON_EXTRACT(data, '$.").append(condition.key()).append("') ").append(getSqlOperator(condition)).append(" AND ");
+                    }
+                    builder.setLength(builder.length() - 5); // Remove the last " AND "
+                    builder.append(") OR ");
                 }
-                query.setLength(query.length() - 5); // Remove the last " AND "
-                query.append(") OR ");
-            }
-            query.setLength(query.length() - 4); // Remove the last " OR "
-
-            if (skip > 0) {
-                query.append(" OFFSET ").append(skip);
+                builder.setLength(builder.length() - 4); // Remove the last " OR "
             }
 
-            if (limit > 0) {
-                query.append(" LIMIT ").append(limit);
+            if (query.offset() > 0) {
+                builder.append(" OFFSET ").append(query.offset());
             }
 
-            Condition sortCondition = conditions[0];
+            if (query.limit() > 0) {
+                builder.append(" LIMIT ").append(query.limit());
+            }
+
+            Sort sortCondition = query.sorts().get(0);
             if (sortCondition != null && sortCondition.sortingType() == SortingType.ASCENDING) {
-                query.append(" ORDER BY JSON_EXTRACT(data, '$.").append(sortCondition.key()).append("') ASC");
+                builder.append(" ORDER BY JSON_EXTRACT(data, '$.").append(sortCondition.field()).append("') ASC");
             } else if (sortCondition != null && sortCondition.sortingType() == SortingType.DESCENDING) {
-                query.append(" ORDER BY JSON_EXTRACT(data, '$.").append(sortCondition.key()).append("') DESC");
+                builder.append(" ORDER BY JSON_EXTRACT(data, '$.").append(sortCondition.field()).append("') DESC");
             }
-            
+
             try (Connection connection = ds.getConnection();
-                 PreparedStatement stmt = connection.prepareStatement(query.toString())) {
+                 PreparedStatement stmt = connection.prepareStatement(builder.toString())) {
                 int index = 1;
-                for (Condition condition : conditions) {
+                for (Condition condition : query.conditions()) {
                     stmt.setObject(index++, condition.value());
                 }
                 ResultSet rs = stmt.executeQuery();
@@ -107,21 +105,103 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
     }
 
     @Override
-    public CompletableFuture<V> get(K key) {
-        return CompletableFuture.supplyAsync(() -> {
-            String query = "SELECT * FROM " + table + " WHERE " + idFieldName + " = ?";
+    public CompletableFuture<Void> remove(Query query) {
+        return CompletableFuture.runAsync(() -> {
+            StringBuilder builder = new StringBuilder("DELETE FROM ").append(table);
+
+            if (!query.conditions().isEmpty()) {
+                builder.append(" WHERE ");
+                List<List<Condition>> groups = Condition.group(query.conditions().toArray(new Condition[0]));
+                for (List<Condition> group : groups) {
+                    builder.append("(");
+                    for (Condition condition : group) {
+                        builder.append("JSON_EXTRACT(data, '$.").append(condition.key()).append("') ").append(getSqlOperator(condition)).append(" AND ");
+                    }
+                    builder.setLength(builder.length() - 5); // Remove the last " AND "
+                    builder.append(") OR ");
+                }
+                builder.setLength(builder.length() - 4); // Remove the last " OR "
+            }
+
+            if (query.offset() > 0) {
+                builder.append(" OFFSET ").append(query.offset());
+            }
+
+            if (query.limit() > 0) {
+                builder.append(" LIMIT ").append(query.limit());
+            }
+
+
             try (Connection connection = ds.getConnection();
-                 PreparedStatement stmt = connection.prepareStatement(query)) {
-                stmt.setObject(1, key);
+                 PreparedStatement stmt = connection.prepareStatement(builder.toString())) {
+                int index = 1;
+                for (Condition condition : query.conditions()) {
+                    stmt.setObject(index++, condition.value());
+                }
+                stmt.executeUpdate();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }, StorageAPIConstants.DB_THREAD_POOL);
+    }
+
+    @Override
+    public CompletableFuture<List<AggregationResult>> aggregate(Query query) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (query.aggregations().isEmpty()) {
+                throw new IllegalArgumentException("At least one aggregation must be specified");
+            }
+
+            StringBuilder builder = new StringBuilder("SELECT ");
+
+            for (Aggregation aggregation : query.aggregations()) {
+                builder.append(getSqlAggregator(aggregation)).append(", ");
+            }
+            builder.setLength(builder.length() - 2);
+            builder.append(" FROM ").append(table);
+
+            if (!query.conditions().isEmpty()) {
+                builder.append(" WHERE ");
+                List<List<Condition>> groups = Condition.group(query.conditions().toArray(new Condition[0]));
+                for (List<Condition> group : groups) {
+                    builder.append("(");
+                    for (Condition condition : group) {
+                        builder.append("JSON_EXTRACT(data, '$.").append(condition.key()).append("') ").append(getSqlOperator(condition)).append(" AND ");
+                    }
+                    builder.setLength(builder.length() - 5); // Remove the last " AND "
+                    builder.append(") OR ");
+                }
+                builder.setLength(builder.length() - 4); // Remove the last " OR "
+            }
+
+            if (query.offset() > 0) {
+                builder.append(" OFFSET ").append(query.offset());
+            }
+
+            if (query.limit() > 0) {
+                builder.append(" LIMIT ").append(query.limit());
+            }
+
+            List<AggregationResult> results = new ArrayList<>();
+            try (Connection connection = ds.getConnection();
+                 PreparedStatement stmt = connection.prepareStatement(builder.toString())) {
+                int index = 1;
+                for (Condition condition : query.conditions()) {
+                    stmt.setObject(index++, condition.value());
+                }
                 ResultSet rs = stmt.executeQuery();
-                if (rs.next()) {
-                    return StorageAPIConstants.getGson().fromJson(rs.getString("data"), valueClass);
+                while (rs.next()) {
+                    Object object = rs.getObject(0);
+                    String alias = rs.getCursorName();
+                    results.add(new AggregationResult(alias, object));
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
             }
-            return null;
+
+            return results;
         }, StorageAPIConstants.DB_THREAD_POOL);
+
     }
 
     @Override
@@ -132,21 +212,6 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
                  PreparedStatement stmt = connection.prepareStatement(query)) {
                 stmt.setObject(1, uuidToString(IdUtils.getId(valueClass, value)));
                 stmt.setString(2, StorageAPIConstants.getGson().toJson(value));
-                stmt.executeUpdate();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-            return null;
-        }, StorageAPIConstants.DB_THREAD_POOL);
-    }
-
-    @Override
-    public CompletableFuture<Void> remove(V key) {
-        return CompletableFuture.supplyAsync(() -> {
-            String query = "DELETE FROM " + table + " WHERE " + idFieldName + " = ?";
-            try (Connection connection = ds.getConnection();
-                 PreparedStatement stmt = connection.prepareStatement(query)) {
-                stmt.setObject(1, uuidToString(IdUtils.getId(valueClass, key)));
                 stmt.executeUpdate();
             } catch (SQLException e) {
                 e.printStackTrace();
@@ -175,22 +240,6 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
     }
 
     @Override
-    public CompletableFuture<Boolean> contains(String field, Object value) {
-        return CompletableFuture.supplyAsync(() -> {
-            String query = "SELECT 1 FROM " + table + " WHERE JSON_EXTRACT(data, '$." + field + "') = ?";
-            try (Connection connection = ds.getConnection();
-                 PreparedStatement stmt = connection.prepareStatement(query)) {
-                stmt.setObject(1, value);
-                ResultSet rs = stmt.executeQuery();
-                return rs.next();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-            return false;
-        }, StorageAPIConstants.DB_THREAD_POOL);
-    }
-
-    @Override
     public CompletableFuture<Collection<V>> allValues() {
         return CompletableFuture.supplyAsync(() -> {
             List<V> values = new ArrayList<>();
@@ -209,7 +258,7 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
     }
 
     @Override
-    public CompletableFuture<Void> addIndex(String field) {
+    public CompletableFuture<Void> index(String field) {
         return CompletableFuture.runAsync(() -> {
             String query = "ALTER TABLE " + table + " ADD COLUMN " + field + " TEXT AS (JSON_VALUE(data, '$." + field + "')) VIRTUAL";
             try (Connection connection = ds.getConnection();
@@ -222,7 +271,7 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
     }
 
     @Override
-    public CompletableFuture<Void> removeIndex(String field) {
+    public CompletableFuture<Void> unindex(String field) {
         return CompletableFuture.runAsync(() -> {
             String query = "ALTER TABLE " + table + " DROP COLUMN " + field;
             try (Connection connection = ds.getConnection();
@@ -282,6 +331,29 @@ public class MariaDBFStorage<K, V> implements FieldStorage<K, V>, ConstructableV
                 return "!= ?";
             }
             default -> throw new IllegalArgumentException("Unknown filter type: " + condition.conditionType());
+        }
+    }
+
+    public String getSqlAggregator(Aggregation aggregation) {
+        switch (aggregation.function()) {
+            case COUNT -> {
+                return "COUNT(*)" + (aggregation.alias() == null ? "" : " AS " + aggregation.alias());
+            }
+            case SUM -> {
+                return "SUM(JSON_VALUE(data, '$." + aggregation.field() + "'))" + (aggregation.alias() == null ? "" : " AS " + aggregation.alias());
+            }
+            case AVG -> {
+                return "AVG(JSON_VALUE(data, '$." + aggregation.field() + "'))" + (aggregation.alias() == null ? "" : " AS " + aggregation.alias());
+            }
+            case MAX -> {
+                return "MAX(JSON_VALUE(data, '$." + aggregation.field() + "'))" + (aggregation.alias() == null ? "" : " AS " + aggregation.alias());
+            }
+            case MIN -> {
+                return "MIN(JSON_VALUE(data, '$." + aggregation.field() + "'))" + (aggregation.alias() == null ? "" : " AS " + aggregation.alias());
+            }
+            default -> {
+                throw new IllegalArgumentException("Unknown aggregation function: " + aggregation.function());
+            }
         }
     }
 

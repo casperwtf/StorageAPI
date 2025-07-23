@@ -1,8 +1,7 @@
 package wtf.casper.storageapi.impl.direct.statelesskvstorage;
 
 import wtf.casper.storageapi.Credentials;
-import wtf.casper.storageapi.impl.kvstorage.MariaDBKVStorage;
-import wtf.casper.storageapi.impl.statelesskvstorage.SqlKVStorage;
+import wtf.casper.storageapi.impl.kvstorage.SqlKVStorage;
 import wtf.casper.storageapi.misc.ConstructableValue;
 
 import java.util.function.Function;

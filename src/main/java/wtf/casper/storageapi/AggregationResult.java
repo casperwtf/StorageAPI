@@ -7,8 +7,7 @@ import lombok.experimental.Accessors;
 @Data
 @Accessors(fluent = true)
 @AllArgsConstructor
-public class Aggregation {
-    private AggregateFunction function;
-    private String field;
+public class AggregationResult {
     private String alias;
+    private Object value;
 }
